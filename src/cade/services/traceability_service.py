@@ -10,6 +10,7 @@ from typing import Any
 
 from cade.models.specification import Specification, SpecificationValidationError
 from cade.services.sql_service import SqlTemplateService
+from cade.services.dependency_service import DependencyService
 
 
 class TraceabilityService:
@@ -33,6 +34,8 @@ class TraceabilityService:
 
     def build(self, specification: Specification) -> dict[str, Any]:
         spec = specification
+        artifact_paths = {node.id: node.artifact for node in DependencyService().build(spec).nodes
+                          if node.artifact is not None}
         requirements = {r.id: r for r in spec.business.requirements}
         checks = tuple(check_id for check_id, _ in SqlTemplateService().check_statements(spec))
         checks_set = set(checks)
@@ -133,7 +136,7 @@ class TraceabilityService:
                 "nullable": attr.nullable,
                 "requirement_ids": list(attr.requirement_ids),
                 "rules": branch_rules,
-                "assets": [f"{spec.product.name}.sql", f"{spec.product.name}.publish.sql"],
+                "assets": [artifact_paths['transform:canonical'], artifact_paths['publish:product']],
             })
 
         # A deliberately unmapped source attribute is still kept by raw preservation;
@@ -150,11 +153,11 @@ class TraceabilityService:
             test_ids = sorted({key for criterion in ac for key in criterion["check_ids"]})
             assets: set[str] = set()
             if assigned:
-                assets.update((f"{spec.product.name}.sql", f"{spec.product.name}.publish.sql"))
+                assets.update((artifact_paths['transform:canonical'], artifact_paths['publish:product']))
             if test_ids:
-                assets.add(f"{spec.product.name}.checks.sql")
+                assets.add(artifact_paths['quality:checks'])
                 if "reconciliation" in test_ids:
-                    assets.add(f"{spec.product.name}.audit.sql")
+                    assets.add(artifact_paths['quality:audit'])
             requirements_report.append({
                 "id": req_id,
                 "statement": requirement.statement,
@@ -174,7 +177,7 @@ class TraceabilityService:
             "requirements": requirements_report,
             "quality_checks": [
                 {"id": check_id, "type": test_types.get(check_id, "generated"),
-                 "asset": f"{spec.product.name}.checks.sql",
+                 "asset": artifact_paths['quality:checks'],
                  "result": "not_run", "runtime_result": "run-manifest.json (in the build run directory or --report path)"}
                 for check_id in checks
             ],

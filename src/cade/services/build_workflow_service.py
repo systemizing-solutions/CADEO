@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 from uuid import uuid4
+from urllib.parse import quote
 
 from sqlalchemy.engine import make_url
 
@@ -73,6 +74,18 @@ class BuildWorkflowService:
         self.files.write_text(acceptance_report, '\n'.join(
             EvidenceService().markdown(EvidenceService().build(spec, manifest, str(destination)))
             for spec in specs.values()))
+        product_reports: dict[Path, list[str]] = {}
+        for spec_path, spec in selected.values():
+            product_directory = ProductService.output_directory(spec_path, spec, project.root, output, [])
+            product_report = product_directory / 'runs' / run_id / 'evidence' / 'acceptance-results.md'
+            product_reports.setdefault(product_report, []).append(
+                EvidenceService().markdown(EvidenceService().build(spec, manifest, str(destination))))
+        for product_report, sections in product_reports.items():
+            manifest_link = quote(Path(os.path.relpath(
+                destination.resolve(), product_report.parent.resolve())).as_posix())
+            self.files.write_text(product_report,
+                                  f'Manifest: [run-manifest.json]({manifest_link})\n\n' + '\n'.join(sections))
+            generated.append(product_report)
         return {
             'run_id': run_id, 'status': manifest['status'], 'products': list(plan.products),
             'manifest_path': str(destination), 'acceptance_report_path': str(acceptance_report),

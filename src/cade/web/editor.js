@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.0.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.8.3.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -792,7 +792,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.0.schema.json' ? 'Bundled product schema (v0.8.0)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.8.3.schema.json' ? 'Bundled product schema (v0.8.3)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -895,7 +895,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.0',
+    spec_version: state.schema?.['x-schema-version'] || '0.8.3',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -1060,7 +1060,7 @@ function updateEvidenceState() {
   if(!state.evidence){banner.className='evidence-state';banner.textContent='Review the traceability matrix. Run a build to generate execution evidence.';return;}
   const evidence=state.evidence;
   banner.className=`evidence-state ${evidence.evidence_status==='published'?'success':evidence.evidence_status==='blocked'?'error':evidence.evidence_status==='stale'?'stale':''}`;
-  banner.textContent=evidence.evidence_status==='not_run'?'No run evidence: checks are defined but have not been executed.':
+  banner.textContent=evidence.evidence_status==='not_run'?'No run evidence: checks are defined but have not been executed. A local CADE build using the configured connection is highly recommended; if skipped, ensure a data run is completed in development before release.':
     evidence.evidence_status==='stale'?'Selected run does not match the current specification; results are not treated as passed.':
     `Run ${evidence.run_id}: ${evidence.evidence_status}. ${evidence.summary.failed} failed check(s), ${evidence.summary.not_run} not run.`;
 }
@@ -1171,6 +1171,11 @@ async function showSqlTab() {
     el(tab+'Tab').setAttribute('aria-selected',String(tab==='sql'));
   });
   updateSqlState();
+  const codeViewport=el('sqlCode').parentElement;
+  const horizontalScroll=codeViewport.scrollLeft;
+  el('sqlCode').focus({preventScroll:true});
+  el('sqlCode').scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+  codeViewport.scrollLeft=horizontalScroll;
 }
 let sqlSelectionToken=0;
 async function renderSqlArtifact() {
@@ -1506,7 +1511,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.0.schema.json', false);
+    await activateSchema('schemas/product-v0.8.3.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

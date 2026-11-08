@@ -182,7 +182,7 @@ class ProjectService:
             destination = ProductService.output_directory(
                 path, spec, project.root, output, warnings)
             if build_id is not None:
-                destination = destination / build_id
+                destination = destination / 'runs' / build_id
             destinations[name] = destination
             selected_dialect = ProductService.output_dialect(path, spec, dialect, warnings)
             trace = TraceabilityService().build(spec)

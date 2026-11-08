@@ -11,15 +11,42 @@ Run `cade tutorial init`. This creates a new `tutorial` folder. It does not
 replace an existing folder. Run the printed `export` command in your terminal.
 It sets the SQLite connection for the normal CLI commands below.
 
-Run `cade build tutorial/starter/product.yaml`.
+Run these commands in order to reach the three proof states:
+
+```bash
+cade validate tutorial/starter/product.yaml
+cade compile tutorial/starter/product.yaml --out tutorial/build --dialect sqlite
+cade build tutorial/starter/product.yaml --out tutorial/build
+```
+
 One source, `input_devices`, produces one output, `tutorial_device`.
 The output has three device IDs: D1, D2, and D3. Its key is `device_id`.
 Two devices belong to M1. A merchant ID is not a device ID.
 
 UI: Run `cade ui .`. Open the printed local URL. Select **Tutorial**.
 Select **Create local example** if you have not used the CLI setup.
-Select **Open starter**. Use **Build & publish** in the Deliver stage.
-Keep the validation scope set to **Current specification**.
+Select **Open starter**. Use **Validate**, **Preview SQL**, then
+**Build & publish** in order. Keep the validation scope set to
+**Current specification**.
+
+Read results as three distinct proof states:
+
+| State | Proves | Does not prove |
+| --- | --- | --- |
+| **Specification valid** | The contract passes schema and semantic validation. | The rules match owner intent or source data. |
+| **SQL compiled** | SQL was generated and checked for the selected dialect. | It ran against data or passed quality checks. |
+| **Data run passed** | The selected data ran through the build and its required checks and publication passed. | Sample data represents production or the product is release-approved. |
+
+The starter build above is the first full run, against the tutorial's local
+SQLite sample data. This fixture is tutorial-specific; CADE builds are not
+SQLite-only. For other products, CLI `cade build` and editor **Build & publish**
+use the execution connection selected in `delivery.execution.connection`,
+resolved through `sources.connections.<id>.url_env`.
+
+A local CADE data run using the configured connection is highly recommended,
+not required. If skipped, run `cade evidence tutorial/starter/product.yaml`; the
+evidence report says no data-run evidence was supplied and advises completing a
+data run in development before release.
 
 ## 2. Check the meaning with the data owner
 

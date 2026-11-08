@@ -1,6 +1,7 @@
 """Coordinates specification, generation, and local output persistence."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -52,7 +53,7 @@ class ProductService:
 
         A YAML output is relative to that YAML file. A CLI override is relative to
         the current working directory. In directory mode the override is a common
-        root; preserving input subdirectories avoids collisions between products.
+        root; each product has its own named directory under that root.
         """
         specifications = self.files.find_yaml_files(path)
         directory_mode = path.is_dir()
@@ -86,11 +87,14 @@ class ProductService:
             from cade.services.project_service import Project, ProjectService
             project = Project(spec_path.parent, tuple((m.product.name,spec_path,m) for m in bundle.models))
             product_plan = ProjectService(self.files,self.specifications,self).plan(project)
+            product_plan = replace(product_plan, nodes=tuple(
+                replace(node, artifact='../' + node.artifact) if node.artifact else node
+                for node in product_plan.nodes))
             destination = self.output_directory(
                 spec_path,bundle.models[0],path if directory_mode else None,output,[])
             for artifact,contents in (
-                (destination / f'{bundle.name}.plan.json', json.dumps(product_plan.to_dict(),indent=2)+'\n'),
-                (destination / f'{bundle.name}.plan.mmd', product_plan.mermaid())):
+                (destination / 'plans' / f'{bundle.name}.plan.json', json.dumps(product_plan.to_dict(),indent=2)+'\n'),
+                (destination / 'plans' / f'{bundle.name}.plan.mmd', product_plan.mermaid())):
                 resolved = artifact.resolve()
                 if resolved in planned:
                     raise SpecificationValidationError(f'Output collision for combined product DAG: {artifact}')
@@ -111,10 +115,12 @@ class ProductService:
             if spec.output is not None:
                 warnings.append(
                     f"{path}: YAML output '{spec.output}' ignored; explicit --out '{override}' takes precedence")
-            return override / path.parent.relative_to(root) if root is not None else override
-        if spec.output is not None:
-            return path.parent / spec.output
-        return path.parent / "build" if root is not None else Path("build")
+            destination = override
+        elif spec.output is not None:
+            destination = path.parent / spec.output
+        else:
+            destination = path.parent / "build" if root is not None else Path("build")
+        return destination / spec.product.name.rsplit('.', 1)[0]
 
     @staticmethod
     def output_dialect(path: Path, spec: Specification, override: str | None,
@@ -143,14 +149,17 @@ class ProductService:
             if node.artifact is not None:
                 artifacts[output / node.artifact] = emitters[node.id]()
         name = specification.product.name
-        artifacts[output / f"{name}.json"] = json.dumps(
+        artifacts[output / 'metadata' / f"{name}.json"] = json.dumps(
             specification.definition, indent=2, ensure_ascii=False) + "\n"
-        artifacts[output / f"{name}.plan.json"] = json.dumps(
-            plan.to_dict(), indent=2, ensure_ascii=False) + "\n"
-        artifacts[output / f"{name}.plan.mmd"] = plan.mermaid()
+        stored_plan = replace(plan, nodes=tuple(
+            replace(node, artifact='../' + node.artifact) if node.artifact else node
+            for node in plan.nodes))
+        artifacts[output / 'plans' / f"{name}.plan.json"] = json.dumps(
+            stored_plan.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        artifacts[output / 'plans' / f"{name}.plan.mmd"] = plan.mermaid()
         trace_service = TraceabilityService()
         trace = trace_service.build(specification)
-        artifacts[output / f"{name}.lineage.json"] = json.dumps(
+        artifacts[output / 'lineage' / f"{name}.lineage.json"] = json.dumps(
             trace, indent=2, ensure_ascii=False) + "\n"
-        artifacts[output / f"{name}.documentation.md"] = trace_service.markdown(specification, trace)
+        artifacts[output / 'documentation' / f"{name}.documentation.md"] = trace_service.markdown(specification, trace)
         return artifacts

@@ -1,4 +1,4 @@
-"""Local v0.8.0 executable acceptance test (SQLAlchemy)."""
+"""Local v0.8.3 executable acceptance test (SQLAlchemy)."""
 from pathlib import Path
 import argparse
 from tempfile import TemporaryDirectory
@@ -52,10 +52,11 @@ def run(database: Path | None = None) -> None:
 
 
 def _execute_demo(db, output, products):
-    products.compile(ROOT / "sqlite_device_full.yaml", output, "sqlite")
+    artifacts = products.compile(ROOT / "sqlite_device_full.yaml", output, "sqlite")
+    artifacts_by_name = {path.name: path for path in artifacts}
     prepare(db)
-    execute_script(db, (output / "device_product.device.preserve.sql").read_text())
-    execute_script(db, (output / "device_product.device.sql").read_text())
+    execute_script(db, artifacts_by_name["device_product.device.preserve.sql"].read_text())
+    execute_script(db, artifacts_by_name["device_product.device.sql"].read_text())
     rows = db.exec_driver_sql("SELECT device_id,merchant_account_number,agreement_status,source_system "
                       "FROM device_product__dp_stage ORDER BY device_id").fetchall()
     assert rows == [
@@ -66,22 +67,22 @@ def _execute_demo(db, output, products):
     assert db.exec_driver_sql("SELECT unmapped_payload FROM device_product__raw_0_d "
                       "WHERE asset_id='d2'").fetchone()[0] == 'retain raw B'
     assert db.exec_driver_sql("SELECT original_notes FROM device_product__raw_0_sc").fetchone()[0] == 'retain agreement notes'
-    audit = db.exec_driver_sql((output / "device_product.device.audit.sql").read_text()).fetchall()
+    audit = db.exec_driver_sql(artifacts_by_name["device_product.device.audit.sql"].read_text()).fetchall()
     assert audit[0][0] == 0 and audit[0][8] == 1, audit  # primary: one filtered record
     assert audit[1][0] == 1 and audit[1][9] == 1, audit  # fallback: one precedence loss
-    check_queries = [q.strip() for q in ExecutionBroker.statements((output / "device_product.device.checks.sql").read_text(), "sqlite")
+    check_queries = [q.strip() for q in ExecutionBroker.statements(artifacts_by_name["device_product.device.checks.sql"].read_text(), "sqlite")
                      if q.strip()]
     failures = [db.exec_driver_sql(q).fetchone()[0] for q in check_queries]
     assert all(x == 0 for x in failures), failures
-    execute_script(db, (output / "device_product.device.publish.sql").read_text())
+    execute_script(db, artifacts_by_name["device_product.device.publish.sql"].read_text())
     assert db.exec_driver_sql("SELECT COUNT(*) FROM device_product").fetchone()[0] == 3
-    print('PASS: v0.8.0 DAG-ordered staging, checks, publication, reconciliation and preservation')
+    print('PASS: v0.8.3 DAG-ordered staging, checks, publication, reconciliation and preservation')
     print('Output:', rows)
     print('Audit:', audit)
     print('Quality failures:', failures)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run compiled v0.8.0 demo in SQLite')
+    parser = argparse.ArgumentParser(description='Run compiled v0.8.3 demo in SQLite')
     parser.add_argument('--database', type=Path, help='Create a persistent database for cade verify')
     args = parser.parse_args()
     run(args.database)

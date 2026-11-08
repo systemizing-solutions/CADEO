@@ -1,7 +1,7 @@
 schema:
-  path: ../schemas/product-v0.8.0.schema.json
-  version: 0.8.0
-spec_version: 0.8.0
+  path: ../schemas/product-v0.8.3.schema.json
+  version: 0.8.3
+spec_version: 0.8.3
 definition:
   name: merchant_inventory
   description: Simple merchant inventory

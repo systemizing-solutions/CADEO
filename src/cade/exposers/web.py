@@ -31,17 +31,18 @@ class WorkspaceError(ValueError):
     """A requested path is invalid or escapes the selected local workspace."""
 
 
-def create_app(workspace: Path):
+def create_app(workspace: Path, *, overwrite: bool = False):
     """Create a local Flask app bound by the CLI to the loopback interface only."""
     from flask import Flask, Response, abort, jsonify, request
     from werkzeug.exceptions import HTTPException
 
-    root = Path(workspace).resolve(strict=True)
+    root = Path(workspace).resolve()
+    root.mkdir(parents=True, exist_ok=True)
     if not root.is_dir():
         raise WorkspaceError(f'Not a directory: {root}')
     files = FileBroker()
     schemas = SchemaCatalogService(root)
-    schemas.ensure_builtin(files)
+    schemas.ensure_builtin(files, overwrite=overwrite)
     from cade.services.driver_installation_service import DriverInstallationService
     installations = DriverInstallationService()
 
@@ -182,7 +183,7 @@ def create_app(workspace: Path):
 
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.0')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.8.3')
 
     @app.get('/tutorial')
     def tutorial_page():

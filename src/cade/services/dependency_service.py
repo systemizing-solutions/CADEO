@@ -130,7 +130,7 @@ class DependencyService:
             add("source:" + source.id, "source", tuple("source:" + key for key in source.depends_on),
                 action="external")
         source_dependencies = tuple("source:" + source.id for source in specification.sources)
-        add("preserve:raw", "preservation", source_dependencies, f"{product}.preserve.sql",
+        add("preserve:raw", "preservation", source_dependencies, f"sql/preservation/{product}.preserve.sql",
             "sql" if specification.preservation.mode == "snapshot" else "external")
         for index, branch in enumerate(specification.branches):
             source_ids = {branch.source.id, *(join.source.id for join in branch.joins)}
@@ -138,8 +138,8 @@ class DependencyService:
             add(f"transform:branch:{index}", "transformation", dependencies)
         add("transform:canonical", "transformation",
             tuple(f"transform:branch:{i}" for i in range(len(specification.branches))),
-            f"{product}.sql", "sql")
-        add("quality:audit", "quality-check", ("transform:canonical",), f"{product}.audit.sql", "sql")
-        add("quality:checks", "quality-check", ("quality:audit",), f"{product}.checks.sql", "gate")
-        add("publish:product", "publication", ("quality:checks",), f"{product}.publish.sql", "sql")
+            f"sql/transformations/{product}.sql", "sql")
+        add("quality:audit", "quality-check", ("transform:canonical",), f"sql/quality/{product}.audit.sql", "sql")
+        add("quality:checks", "quality-check", ("quality:audit",), f"sql/quality/{product}.checks.sql", "gate")
+        add("publish:product", "publication", ("quality:checks",), f"sql/publication/{product}.publish.sql", "sql")
         return DependencyPlan(self._sort(nodes))

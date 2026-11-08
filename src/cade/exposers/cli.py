@@ -18,7 +18,7 @@ from cade.services.product_service import ProductService
 from cade.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.0"
+VERSION = "0.8.3"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -105,24 +105,29 @@ def main(argv: list[str] | None = None) -> int:
 
     ui = commands.add_parser("ui", help="Start the local JSON Schema-driven web editor")
     ui.add_argument("root", nargs="?", type=Path, default=Path.cwd(),
-                    help="Directory containing YAML data product specifications")
+                    help="Workspace directory (created if missing; existing files are preserved)")
     ui.add_argument("--port", type=int, default=8765,
                     help="Local HTTP port (default: 8765)")
+    ui.add_argument("--overwrite", action="store_true",
+                    help="Replace the workspace's bundled schema; leave product YAML and other files untouched")
 
     args = parser.parse_args(argv)
     if args.command == "engines" and args.connect and not args.url_env:
         parser.error("--connect requires --url-env")
     if args.command == "ui":
-        if not args.root.is_dir():
+        if args.root.exists() and not args.root.is_dir():
             parser.error(f"Editor workspace is not a directory: {args.root}")
         try:
             from cade.exposers.web import create_app
         except ImportError as error:
             print(f"Error: Flask is required for the local editor: {error}", file=sys.stderr)
             return 1
+        try:
+            app = create_app(args.root, overwrite=args.overwrite)
+        except (OSError, ValueError) as error:
+            parser.error(f"Could not open editor workspace: {error}")
         print(f"Local editor: http://127.0.0.1:{args.port}/", flush=True)
-        create_app(args.root).run(host="127.0.0.1", port=args.port, debug=False,
-                                      use_reloader=False)
+        app.run(host="127.0.0.1", port=args.port, debug=False, use_reloader=False)
         return 0
     files = FileBroker()
     specifications = SpecificationService(files)

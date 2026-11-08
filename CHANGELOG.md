@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.3 - Product-owned generated deliverables (2026-11-08)
+
+- Generate one named folder per data product under the configured output root, keeping all of its models together. Explicit `--out` uses that common root even when source YAML files are in different subfolders.
+- Organize SQL into `sql/transformations`, `sql/quality`, `sql/preservation`, and `sql/publication`; separate `metadata`, `plans`, `lineage`, and `documentation` deliverables. Keep model-qualified filenames and update emitted plan and traceability references to their actual paths.
+- Isolate native build artifacts in `<product>/runs/<run-id>/`, including a product-specific `evidence/acceptance-results.md` linked to the authoritative shared run manifest. Preserve shared project plans, run manifests, transaction safety, and the existing SQL generation/execution pipeline.
+- Update SQLite demos, add compilation, cross-product, editor-preview and native-build regression coverage, and document the output-layout change. Existing flat generated files are not automatically moved or deleted.
+- Align the built-in YAML specification and JSON Schema version with app v0.8.3. Update bundled templates, editor defaults, version-pinned schemas, examples and tutorials together; the specification structure is unchanged.
+- Create missing editor workspace directories on `cade ui` startup, preserving existing files by default. Add `--overwrite` to explicitly restore the workspace's bundled schema without replacing product YAML, databases or generated outputs.
+
+## 0.8.2 — Explicit proof states and local-first verification (2026-11-08)
+
+- Explain what specification validation, SQL compilation, and a passing data run prove, and what each does not prove.
+- Make the local SQLite tutorial the first-run path through all three proof states; a local data run is highly recommended, not a release gate, and missing evidence advises completing a data run in development before release.
+
+## 0.8.1 — Local connection-support tutorial and onboarding (2026-11-08)
+
+- Add a local connection-support tutorial for first-time users, with `cade tutorial init`, `guide`, `report`, and `exercise` workflows and a six-step editor walkthrough.
+- Generate isolated SQLite sample data and starter/full-product contracts; guide users through source design, owner review, build and acceptance evidence, a support queue, and wrong-mapping exercises that verify failed builds preserve the published output.
+- Reuse CADE's existing specification, build, and execution services for the tutorial, and document local setup, database-driver options, and expected business outcomes.
+
 ## 0.8.0 — Multiple canonical models and published tables in one product (2026-11-06)
 
 **Breaking specification release.** A product now has keyed canonical models, per-model STTM mappings, per-model assurance rules, and per-model publication targets under one authoritative six-stage YAML specification. Source `model_ref` resolves another model published by the same product; cross-product `product_ref` names a product and model. All dependencies are compiled into the existing project DAG and passed through the existing SQLGlot, SQLFluff and SQLAlchemy services. Acceptance checks are qualified as `model_id/check_id`. The Flask editor has a model selector and synchronized Add/Remove controls; ERD, lineage, build plan, SQL preview, and evidence cover multiple models. The two-table Merchant+Device example and regression tests demonstrate this contract. Older single-canonical YAML is rejected; no compatibility parser or execution path was added.

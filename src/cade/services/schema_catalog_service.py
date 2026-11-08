@@ -19,7 +19,7 @@ from cade.models.specification import SpecificationValidationError
 
 
 class SchemaCatalogService:
-    DEFAULT = "schemas/product-v0.8.0.schema.json"
+    DEFAULT = "schemas/product-v0.8.3.schema.json"
     VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
     DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
@@ -92,14 +92,13 @@ class SchemaCatalogService:
                 raise
             raise SpecificationValidationError(f"Invalid JSON Schema file {choice}: {error}") from error
 
-    def ensure_builtin(self, files: Any) -> str:
-        """Install versioned local schema if missing, without overwriting a revision."""
+    def ensure_builtin(self, files: Any, *, overwrite: bool = False) -> str:
+        """Install the bundled schema, preserving existing revisions unless requested."""
         from cade.services.specification_service import SpecificationService
         destination = self.path(self.DEFAULT)
         bundled = files.read_bundled_text(SpecificationService.SCHEMA_PATH)
-        if not destination.exists():
-            files.write_text(destination, bundled, overwrite=False)
-        # Never overwrite a changed file with the same version. Report mismatch.
+        if overwrite or not destination.exists():
+            files.write_text(destination, bundled, overwrite=overwrite)
         self.load(self.DEFAULT, files)
         return self.DEFAULT
 

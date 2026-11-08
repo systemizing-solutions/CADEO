@@ -1,4 +1,4 @@
-"""v0.8.0 single-authoritative-contract regression tests.
+"""v0.8.3 single-authoritative-contract regression tests.
 
 Tests exercise multiple canonical tables in one product, their model-specific
 source mappings, quality gates and project planning. No historical YAML shape.
@@ -53,7 +53,9 @@ def doc():
 
 def test_public_contract_version():
     schema=json.loads(SCHEMA.read_text())
-    assert schema['x-schema-version']=='0.8.0'
+    from cade.exposers.cli import VERSION
+    assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.8.3'
+    assert SchemaCatalogService.DEFAULT == f'schemas/product-v{VERSION}.schema.json'
     assert tuple(schema['properties']) == ('schema','spec_version','definition','model','sources','mapping','assurance','delivery')
     Draft202012Validator.check_schema(schema)
 
@@ -239,10 +241,16 @@ def test_checks_model_qualified_and_real_registry(services):
 
 def test_no_manifest_has_no_passing_evidence(services):
     p=services[0].load(EXAMPLE)
-    result=EvidenceService().aggregate(p,None)
+    service=EvidenceService()
+    result=service.aggregate(p,None)
     assert result['publication']['status']=='not_run'
     assert result['summary']['passed']==0
     assert result['summary']['not_run']>=5
+    assert len(result['evidence_warnings'])==1
+    assert 'highly recommended' in result['evidence_warnings'][0]
+    assert 'configured connection' in result['evidence_warnings'][0]
+    assert 'SQLite' in result['evidence_warnings'][0]
+    assert 'before release' in service.markdown(service.build(p.models[0],None))
 
 
 def test_single_source_example_is_one_model_in_same_shape(services):
@@ -256,7 +264,7 @@ def test_initializer_creates_versioned_complete_product(services,tmp_path):
     assert yaml_path.exists() and schema_path.exists()
     p=services[0].load(yaml_path)
     assert p.models and p.model_ids
-    assert p.definition['spec_version']=='0.8.0'
+    assert p.definition['spec_version']=='0.8.3'
 
 
 def test_all_examples_share_contract(services):
@@ -342,9 +350,10 @@ def test_dependency_order_stable(services):
 
 
 def test_all_specs_use_new_version():
+    specifications = SpecificationService(FileBroker())
     for path in (ROOT/'examples').rglob('*.yaml'):
-        document=yaml.load(path.read_text(), Loader=UniqueKeysLoader)
-        assert document['spec_version']=='0.8.0',path
+        document = specifications.read_document(path)
+        assert document['spec_version']=='0.8.3',path
 
 
 def test_no_old_renderer_in_package():

@@ -1,6 +1,7 @@
+.topbar .brandline{min-width:0;max-width:100%}.topbar .brandline>div{min-width:0}.topbar .brandline h1{overflow-wrap:anywhere}
 .tutorial-layout{display:grid;grid-template-columns:210px minmax(0,780px);gap:36px;max-width:1150px;margin:32px auto;padding:0 24px;letter-spacing:0}
 .tutorial-steps{display:grid;align-content:start;gap:8px;position:sticky;top:24px}
-.tutorial-steps button{border:0;border-left:3px solid transparent;background:transparent;text-align:left;padding:12px;color:var(--muted);line-height:1.4}
+.tutorial-steps button{border:0;border-left:3px solid transparent;background:transparent;text-align:left;padding:12px;color:var(--muted);line-height:1.4;min-width:0;overflow-wrap:anywhere}
 .tutorial-steps button[aria-current=step]{border-color:var(--green);background:#e9f7ef;color:var(--ink);font-weight:700}
 .tutorial-work{min-width:0}.tutorial-step{min-height:360px}.tutorial-step h2{font-size:22px;margin:16px 0}.tutorial-step p{line-height:1.65;max-width:70ch}
 .tutorial-step table{width:100%;border-collapse:collapse;font-size:13px;margin:22px 0;table-layout:fixed}

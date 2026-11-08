@@ -1,5 +1,5 @@
 # CADE
-> Contract-Driven Automation for Data Engineering v0.8.0
+> Contract-Driven Automation for Data Engineering v0.8.3
 
 A **data product contains one or more published canonical models**, not just one table. One versioned YAML specification defines business requirements, multiple canonical entities, source contracts, one STTM per entity, assurance, and one publication target per entity. The JSON Schema drives both validation and the local Flask UI.
 
@@ -16,49 +16,67 @@ cade init product.yaml
 cade ui examples/multi_model --port 8765
 ```
 
+`cade ui test/ --port 8765` creates the workspace directory, including missing
+parents, and installs the bundled schema if absent. Existing schema edits,
+product YAML, databases, and generated outputs are preserved on startup.
+To explicitly restore the bundled schema, use
+`cade ui test/ --port 8765 --overwrite`. This flag replaces only the bundled
+schema file; it does not reset the workspace or overwrite authored products.
+
 Open `http://127.0.0.1:8765` and select `product.yaml` in the multi-model folder. The editor provides a model selector in **Model**, **Map**, **Prove** and **Deliver**, plus Canonical ERD, source-to-target lineage, dependency diagrams, SQL preview, and acceptance evidence. Select **Add model** to create synchronized entries across the canonical, mapping, assurance and target registries. The YAML view edits the same document. The application only listens on localhost.
 
-## Tutorial: Local Connection Support
+## First run: local tutorial
 
-Start with one device source and one output. Then add merchant and service
-sources. Publish a shared product with three canonical models. Use its output
-to find active connections that have no service record.
+Start with the local connection-support tutorial. It creates isolated SQLite
+sample data and guides you from a valid specification through compiled SQL to
+a passing data run. No external database or credentials are needed.
 
 ```bash
 cade tutorial init
-# Run the export command printed by init. It selects the local SQLite database.
-cade build tutorial/starter/product.yaml
+# Run the export command printed by init to select the local SQLite database.
+cade validate tutorial/starter/product.yaml
+cade compile tutorial/starter/product.yaml --out tutorial/build --dialect sqlite
+cade build tutorial/starter/product.yaml --out tutorial/build
 cade tutorial guide
 cade ui .
 ```
 
-In the editor, select **Tutorial**. The six steps cover the owner review,
-source contracts, mappings, checks, publication, and the support queue.
-The CLI and UI use the same contracts and execution services. SQLite needs no
-extra driver. The [full guide](src/cade/templates/tutorial.md) includes all CLI
-commands, three wrong mappings and their business effects, owner-review
-questions, expected results, and instructions for other database connections.
-Use current-file scope. The starter, full product, and wrong mappings are
-separate exercises, not one project to build together.
+These are three distinct proof states:
 
-## First run: local SQL preview
+| State | Proves | Does not prove |
+| --- | --- | --- |
+| **Specification valid** (`cade validate`) | The contract passes schema and semantic validation. | The business rules match the owner's intent or any source data. |
+| **SQL compiled** (`cade compile`) | CADE generated SQL for the selected dialect and validated its syntax. | The SQL has run, the data passes checks, or publication works. |
+| **Data run passed** (tutorial's local SQLite `cade build`) | Generated SQL ran against the local sample data, configured checks passed, and the run's publication steps completed. | The sample represents production, business meaning is approved, or a production release is safe. |
 
-You can learn the workflow without database credentials or a live database:
+In the editor, select **Tutorial**, then **Open starter**. Use **Validate**,
+**Preview SQL**, and **Build & publish** to reach the same states in order. The
+six tutorial steps continue with owner review, source contracts, mappings,
+checks, publication, and the support queue. The CLI and UI use the same
+contracts and execution services. The [full guide](src/cade/templates/tutorial.md)
+includes all commands, wrong-mapping exercises and their business effects,
+owner-review questions, expected results, and instructions for other database
+connections. Use current-file scope. The starter, full product, and wrong
+mappings are separate exercises, not one project to build together.
 
-```bash
-cade validate examples/sqlite_devices.yaml
-cade compile examples/sqlite_devices.yaml --out ./build --dialect sqlite
-```
-
-Open the UI with `cade ui examples`, select `sqlite_devices.yaml`, then use **Validate** and **Preview SQL**. Validation checks the specification; compilation writes generated SQL and supporting files to the output directory. Neither command connects to or publishes into a database. To see the example execute against temporary in-memory SQLite data and run its quality checks, use `python examples/run_sqlite_demo.py`. Database-backed **Build & publish** is a separate step and uses the connection configured in the YAML and its environment variable.
+A local CADE data run using the connection configured in YAML (e.g. SQLite) is highly
+recommended, not a release requirement. If you skip it,
+`cade evidence tutorial/starter/product.yaml` reports that no data-run evidence
+was supplied; ensure a data run is completed in development before releasing.
+Validation and compilation do not connect to a database. SQLite is the
+tutorial's bundled sample only: CLI `cade build` and editor **Build & publish**
+use the execution connection selected in `delivery.execution.connection`,
+resolved through `sources.connections.<id>.url_env`. Set that environment
+variable before running CADE. The editor's **Verification database** path is
+for its separate SQLite verification action, not a build-connection override.
 
 ## One product, multiple tables
 
-The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.0.json`](examples/multi_model/product.schema-v0.8.0.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
+The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.3.json`](examples/multi_model/product.schema-v0.8.3.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
 
 ```yaml
-schema: {path: product.schema-v0.8.0.json, version: "0.8.0"}
-spec_version: "0.8.0"
+schema: {path: product.schema-v0.8.3.json, version: "0.8.3"}
+spec_version: "0.8.3"
 
 definition:
   name: merchant_operations
@@ -166,6 +184,57 @@ python examples/run_multi_model_demo.py
 
 All database operations, including SQLite, are executed through SQLAlchemy. The test creates **Merchant** and **Device** outputs and checks that a failing rerun does not replace previously published data.
 
+## Generated deliverables
+
+The output setting is a **root directory**, not a flat collection of files.
+CADE v0.8.3 creates one folder named after each product's `definition.name`.
+All models belonging to that product stay together, with model-qualified
+filenames such as `merchant_operations.devices.checks.sql`.
+
+```text
+generated/
+  merchant_operations/
+    sql/
+      transformations/  # Canonical staging SQL
+      quality/          # Quality checks and reconciliation audit SQL
+      preservation/     # Source snapshots or external-retention references
+      publication/      # Published tables/views
+    metadata/           # Validated model build-unit definitions (JSON)
+    plans/              # Model dependency plans and combined product DAG
+    lineage/            # Requirement and field traceability (JSON)
+    documentation/      # Model documentation (Markdown)
+    runs/
+      <run-id>/         # Isolated build SQL and supporting deliverables
+        sql/
+        metadata/
+        plans/
+        lineage/
+        documentation/
+        evidence/       # Product acceptance results, linked to run manifest
+```
+
+`delivery.output` remains relative to its YAML file. Explicit `--out` overrides
+it and puts each product directly under that common root, regardless of source
+subdirectories. Without either setting, the output root is `build`.
+Compilation does not create run or evidence folders. Emitted JSON plans contain
+artifact paths relative to the plan file's directory; traceability asset paths
+are relative to the product or run directory.
+
+Cross-product coordination stays separate: project compilation writes
+`project.plan.json` and `project.plan.mmd` in the project output root. Native
+builds keep their shared project plans, authoritative `run-manifest.json` and
+combined `acceptance-results.md` in `<project-output-root>/<run-id>/` (by default,
+`<project>/build/<run-id>/`). Each product's run folder contains its own acceptance
+report with a relative link to that manifest; `--report` can still select a
+different manifest location.
+
+The built-in YAML/JSON Schema version now matches app v0.8.3; its structure is
+unchanged. Existing specifications must update `spec_version`, `schema.version`,
+and `schema.path` to the corresponding v0.8.3 schema. Recompile
+to produce the new layout and update consumers that hard-code flat paths. Use
+the artifact paths returned by compilation or emitted plans where possible.
+Existing flat output files and historical build runs are not moved or deleted.
+
 ## Architecture
 
 ```
@@ -196,11 +265,11 @@ python -m pytest -q
 node --check src/cade/web/editor.js
 ```
 
-The v0.8.0 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
+The v0.8.3 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
 
 ### Notes
 
-- Version `0.8.0` is intentionally a **breaking** specification format; older YAML must be restructured into the four model-keyed registries. No dual parser is supplied.
+- Version `0.8.3` is intentionally a **breaking** specification format; older YAML must be restructured into the four model-keyed registries. No dual parser is supplied.
 - Each `schema.path` is **relative to the YAML** and its version must equal the referenced JSON Schema's `x-schema-version`. Keep them together when sharing a product.
 - Runtime test results, credentials and publication history are never authored into YAML; they live in environment variables and run manifests.
 - Defining two canonical entities in one product does not automatically create a relationship. Declare logical relationships in `model.entities[model_id].relationships`, and explicitly implement physical joins in the model's STTM.

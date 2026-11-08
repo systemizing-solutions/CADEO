@@ -21,6 +21,8 @@ AUDIT_METRICS = (
     'duplicate_source_keys', 'null_source_keys', 'inner_unmatched',
     'filtered', 'deduplicated', 'join_fanout', 'multiplied',
 )
+NO_RUN_WARNING = ('No local/data run evidence supplied. A local CADE run using the configured connection (e.g. SQLite) is highly recommended; '
+                  'if skipped, ensure a data run is completed in development before release.')
 
 
 def specification_fingerprint(spec: Specification) -> str:
@@ -170,7 +172,8 @@ class EvidenceService:
                     step.get('status') == 'passed' for step in manifest['steps']) else 'reviewed'),
             'publication_blockers': blockers,
             'traceability_warnings': trace['warnings'], 'evidence_warnings': anomalies + (
-                ['The selected run predates or does not match the validated product definition.'] if stale else []),
+                ['The selected run predates or does not match the validated product definition.'] if stale else
+                [NO_RUN_WARNING] if manifest is None else []),
         }
 
     @staticmethod
@@ -266,7 +269,10 @@ class EvidenceService:
             combined['publication_blockers'].extend({**blocker,'model_id':model_id}
                 for blocker in report['publication_blockers'])
             combined['traceability_warnings'].extend(f'{model_id}: {w}' for w in report['traceability_warnings'])
-            combined['evidence_warnings'].extend(f'{model_id}: {w}' for w in report['evidence_warnings'])
+            combined['evidence_warnings'].extend(f'{model_id}: {w}' for w in report['evidence_warnings']
+                if w != NO_RUN_WARNING)
+        if manifest is None:
+            combined['evidence_warnings'].append(NO_RUN_WARNING)
         combined['publication'] = {'status':(
             'not_run' if manifest is None else 'stale' if combined['stale'] else
             'published' if all(r['publication']['status']=='published' for r in reports) else 'blocked'),
