@@ -7,6 +7,7 @@ import shlex
 
 import yaml
 from sqlalchemy import inspect
+from sqlalchemy.exc import SQLAlchemyError
 
 from cade.brokers.execution_broker import ExecutionBroker
 from cade.brokers.file_broker import FileBroker
@@ -17,9 +18,22 @@ from cade.services.specification_service import SpecificationService
 class TutorialService:
     ENV = 'CADE_TUTORIAL_DATABASE_URL'
     CASES = ('wrong-key', 'wrong-status', 'inner-join')
+    RESOURCES = ('product.schema.json', 'README.md', 'tutorial.sqlite',
+                 'starter/product.yaml', 'product/product.yaml', 'wrong-key/product.yaml',
+                 'wrong-status/product.yaml', 'inner-join/product.yaml')
 
     def __init__(self):
         self.files = FileBroker()
+
+    def ready(self, root: Path) -> bool:
+        if not all((root / resource).is_file() for resource in self.RESOURCES):
+            return False
+        try:
+            with ExecutionBroker().transaction(f'sqlite:///{root.resolve() / "tutorial.sqlite"}') as connection:
+                return all(inspect(connection).has_table(name)
+                           for name in ('input_devices', 'input_merchants', 'input_services'))
+        except (SQLAlchemyError, ValueError, OSError):
+            return False
 
     def activate(self, root: Path) -> str:
         database = root.resolve() / 'tutorial.sqlite'
@@ -101,7 +115,7 @@ class TutorialService:
                          'merchant_name': 'Harbour Foods', 'service_name': 'Card payments', 'connection_status': 'inactive'},
                         {'connection_id': 'D3', 'merchant_id': 'M2', 'service_id': 'S9',
                          'merchant_name': 'City Pharmacy', 'service_name': None, 'connection_status': 'active'}]}}
-        doc = {'schema': {'path': 'product.schema.json', 'version': '0.8.3'}, 'spec_version': '0.8.3',
+        doc = {'schema': {'path': 'product.schema.json', 'version': '0.8.4'}, 'spec_version': '0.8.4',
             'definition': {'name': 'connection_tutorial',
                 'description': 'Current payment connections for service support',
                 'owner': {'team': 'Service Operations', 'contact': 'service-owner@example.org'},
@@ -132,9 +146,10 @@ class TutorialService:
 
     def create(self, root: Path) -> dict:
         root = root.resolve()
-        root.mkdir(parents=True, exist_ok=False)
+        root.mkdir(parents=True, exist_ok=True)
         schema = self.files.read_bundled_text('schemas/product.schema.json')
-        self.files.write_text(root / 'product.schema.json', schema, overwrite=False)
+        if not self.files.exists(root / 'product.schema.json'):
+            self.files.write_text(root / 'product.schema.json', schema, overwrite=False)
         full = self.document()
         variants = {'starter': self.document(starter=True), 'product': full}
         for case in self.CASES:
@@ -151,19 +166,31 @@ class TutorialService:
         for name, doc in variants.items():
             path = root / name / 'product.yaml'
             doc['schema']['path'] = '../product.schema.json'
-            self.files.write_text(path, yaml.safe_dump(doc, sort_keys=False), overwrite=False)
+            if not self.files.exists(path):
+                self.files.write_text(path, yaml.safe_dump(doc, sort_keys=False), overwrite=False)
             products.validate(path)
         url = f'sqlite:///{root / "tutorial.sqlite"}'
-        self.files.write_text(root / 'tutorial.sqlite', '', overwrite=False)
+        if not self.files.exists(root / 'tutorial.sqlite'):
+            self.files.write_text(root / 'tutorial.sqlite', '', overwrite=False)
+        tables = (
+            ('input_devices',
+             'CREATE TABLE input_devices (device_id TEXT NOT NULL, merchant_id TEXT NOT NULL, service_id TEXT NOT NULL, status TEXT NOT NULL)',
+             "INSERT INTO input_devices VALUES ('D1','M1','S1','LIVE'), ('D2','M1','S1','OFF'), ('D3','M2','S9','LIVE')"),
+            ('input_merchants',
+             'CREATE TABLE input_merchants (merchant_id TEXT NOT NULL, merchant_name TEXT NOT NULL)',
+             "INSERT INTO input_merchants VALUES ('M1','Harbour Foods'), ('M2','City Pharmacy')"),
+            ('input_services',
+             'CREATE TABLE input_services (service_id TEXT NOT NULL, service_name TEXT NOT NULL)',
+             "INSERT INTO input_services VALUES ('S1','Card payments')"),
+        )
         with ExecutionBroker().transaction(url) as connection:
-            connection.exec_driver_sql('CREATE TABLE input_devices (device_id TEXT NOT NULL, merchant_id TEXT NOT NULL, service_id TEXT NOT NULL, status TEXT NOT NULL)')
-            connection.exec_driver_sql('CREATE TABLE input_merchants (merchant_id TEXT NOT NULL, merchant_name TEXT NOT NULL)')
-            connection.exec_driver_sql('CREATE TABLE input_services (service_id TEXT NOT NULL, service_name TEXT NOT NULL)')
-            connection.exec_driver_sql("INSERT INTO input_devices VALUES ('D1','M1','S1','LIVE'), ('D2','M1','S1','OFF'), ('D3','M2','S9','LIVE')")
-            connection.exec_driver_sql("INSERT INTO input_merchants VALUES ('M1','Harbour Foods'), ('M2','City Pharmacy')")
-            connection.exec_driver_sql("INSERT INTO input_services VALUES ('S1','Card payments')")
+            for name, definition, seed in tables:
+                if not inspect(connection).has_table(name):
+                    connection.exec_driver_sql(definition)
+                    connection.exec_driver_sql(seed)
         guide = self.files.read_bundled_text('templates/tutorial.md')
-        self.files.write_text(root / 'README.md', guide, overwrite=False)
+        if not self.files.exists(root / 'README.md'):
+            self.files.write_text(root / 'README.md', guide, overwrite=False)
         self.activate(root)
         return {'root': str(root), 'starter': 'starter/product.yaml', 'product': 'product/product.yaml',
                 'environment': f'export {self.ENV}={shlex.quote(url)}', 'guide': guide}

@@ -52,6 +52,10 @@ class SqlGlotSqlService:
     def generate_checks(self, spec: Specification) -> str:
         return self._translate(self.templates.generate_checks(spec), "quality checks")
 
+    def standalone_checks(self, spec: Specification) -> tuple[tuple[str, str], ...]:
+        return tuple((identifier, self._translate(statement, f"standalone check {identifier}"))
+                     for identifier, statement in self.templates.check_statements(spec, spec.product.target))
+
     def generate_audit(self, spec: Specification) -> str:
         return self._translate(self.templates.generate_audit(spec), "reconciliation audit")
 

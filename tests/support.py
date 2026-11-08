@@ -31,9 +31,9 @@ def write_document(path: Path, document: dict) -> None:
     import yaml
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    reference = path.with_suffix('.schema-v0.8.3.json')
+    reference = path.with_suffix('.schema-v0.8.4.json')
     template = Path(__file__).resolve().parents[1] / 'src/cade/schemas/product.schema.json'
     reference.write_text(template.read_text())
     new_document = copy.deepcopy(document)
-    new_document['schema'] = {'path': reference.name, 'version': '0.8.3'}
+    new_document['schema'] = {'path': reference.name, 'version': '0.8.4'}
     path.write_text(yaml.safe_dump(new_document, sort_keys=False))

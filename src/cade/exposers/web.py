@@ -126,6 +126,16 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.after_request
     def headers(response):
+        if request.path == '/api/check-registry' and response.status_code == 422:
+            payload = response.get_json(silent=True) or {}
+            data = request.get_json(silent=True) or {}
+            if not isinstance(data, dict):
+                data = {}
+            details = '; '.join(f"{issue.get('path', '')}: {issue.get('message', '')}"
+                                for issue in payload.get('issues', []))
+            app.logger.warning('Check registry unavailable for %s: %s%s',
+                               data.get('path') or 'product.yaml', payload.get('error', 'Invalid draft'),
+                               f'; {details}' if details else '')
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Content-Security-Policy'] = (
@@ -183,7 +193,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.3')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.8.4')
 
     @app.get('/tutorial')
     def tutorial_page():
@@ -208,7 +218,9 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.get('/api/tutorial')
     def tutorial_state():
-        return jsonify(ready=(tutorial_root / 'tutorial.sqlite').is_file(),
+        for resource in tutorial.RESOURCES:
+            inside(tutorial_root / resource)
+        return jsonify(ready=tutorial.ready(tutorial_root),
                        path=relative(tutorial_root), cases=tutorial.CASES)
 
     @app.post('/api/tutorial')
@@ -216,6 +228,8 @@ def create_app(workspace: Path, *, overwrite: bool = False):
         data = input_json()
         action_name = data.get('action')
         if action_name == 'init':
+            for resource in tutorial.RESOURCES:
+                inside(tutorial_root / resource)
             result = tutorial.create(inside(tutorial_root))
             return jsonify(path=relative(tutorial_root), environment=result['environment'])
         inside(tutorial_root / 'tutorial.sqlite')
@@ -724,27 +738,42 @@ def create_app(workspace: Path, *, overwrite: bool = False):
                 path.parent, tuple((m.product.name, path, m) for m in products.validate(path).models))
             return jsonify(plan=projects.plan(project, opts).to_dict())
         if name == 'compile':
-            generated = products.compile(path, override, dialect=dialect) if path.is_file() else \
-                projects.build(projects.load(path), output=override, dialect=dialect)[1]
+            test_pack = data.get('test_pack', 'none')
+            if test_pack not in ('none', 'sql'):
+                raise WorkspaceError('test_pack must be none or sql')
+            generated = products.compile(path, override, dialect=dialect, test_pack=test_pack) if path.is_file() else \
+                projects.build(projects.load(path), output=override, dialect=dialect, test_pack=test_pack)[1]
             # Metadata is only a projection of already generated artifacts.
             # No duplicate SQL compilation or dialect inference in JavaScript.
             owners = [(spec.product.name, ProductService.output_dialect(spec_path, spec, dialect, []))
                       for spec_path, spec in items(path, products, projects)]
+            check_ids = {}
+            for manifest_path in generated:
+                if manifest_path.name == 'manifest.json' and manifest_path.parent.parent.name == 'tests':
+                    manifest = json.loads(files.read_text(manifest_path))
+                    check_ids.update({(manifest_path.parent / check['file']).resolve(): check['id']
+                                      for check in manifest['checks']})
             artifacts = []
             for generated_path in generated:
                 if generated_path.suffix.lower() != '.sql':
                     continue
-                matching = [item for item in owners if generated_path.name.startswith(item[0] + '.')]
+                standalone = generated_path.parent.parent.name == 'tests'
+                matching = [item for item in owners if generated_path.name.startswith(item[0] + '.')
+                            or (standalone and generated_path.parent.name == item[0])]
                 owner = max(matching, key=lambda item: len(item[0])) if matching else None
-                artifact_type = ('preservation' if generated_path.name.endswith('.preserve.sql') else
+                artifact_type = ('standalone test' if standalone else
+                                 'preservation' if generated_path.name.endswith('.preserve.sql') else
                                  'reconciliation' if generated_path.name.endswith('.audit.sql') else
                                  'quality checks' if generated_path.name.endswith('.checks.sql') else
                                  'publication' if generated_path.name.endswith('.publish.sql') else
                                  'transformation')
                 artifacts.append({'path': relative(generated_path), 'dialect': owner[1] if owner else None,
                                   'product': owner[0] if owner else None, 'kind': artifact_type,
+                                  'check_id': check_ids.get(generated_path.resolve()),
                                   'grammar_checked': True})
-            return jsonify(generated=[relative(p) for p in generated], artifacts=artifacts)
+            return jsonify(generated=[relative(p) for p in generated], artifacts=artifacts,
+                           test_packs=[relative(p.parent) for p in generated
+                                       if p.name == 'manifest.json' and p.parent.parent.name == 'tests'])
         if name == 'build':
             if data.get('confirm') is not True:
                 raise WorkspaceError('Explicit confirmation is required to execute a build')

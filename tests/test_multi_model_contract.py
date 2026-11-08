@@ -1,4 +1,4 @@
-"""v0.8.3 single-authoritative-contract regression tests.
+"""v0.8.4 single-authoritative-contract regression tests.
 
 Tests exercise multiple canonical tables in one product, their model-specific
 source mappings, quality gates and project planning. No historical YAML shape.
@@ -54,7 +54,7 @@ def doc():
 def test_public_contract_version():
     schema=json.loads(SCHEMA.read_text())
     from cade.exposers.cli import VERSION
-    assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.8.3'
+    assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.8.4'
     assert SchemaCatalogService.DEFAULT == f'schemas/product-v{VERSION}.schema.json'
     assert tuple(schema['properties']) == ('schema','spec_version','definition','model','sources','mapping','assurance','delivery')
     Draft202012Validator.check_schema(schema)
@@ -264,7 +264,7 @@ def test_initializer_creates_versioned_complete_product(services,tmp_path):
     assert yaml_path.exists() and schema_path.exists()
     p=services[0].load(yaml_path)
     assert p.models and p.model_ids
-    assert p.definition['spec_version']=='0.8.3'
+    assert p.definition['spec_version']=='0.8.4'
 
 
 def test_all_examples_share_contract(services):
@@ -353,7 +353,7 @@ def test_all_specs_use_new_version():
     specifications = SpecificationService(FileBroker())
     for path in (ROOT/'examples').rglob('*.yaml'):
         document = specifications.read_document(path)
-        assert document['spec_version']=='0.8.3',path
+        assert document['spec_version']=='0.8.4',path
 
 
 def test_no_old_renderer_in_package():

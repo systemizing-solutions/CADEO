@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.4 - Opt-in standalone SQL test packs (2026-11-08)
+
+- Add `cade compile ... --test-pack sql` and the editor's **Compile test-pack export** selector for file and project compilation. Export one independent SQL query per authoritative check under `<output-root>/<product>/tests/<product.model>/`, with a versioned manifest, prerequisites and a compiler-independent SQLAlchemy runner. Default `--test-pack none` / **None** emits no extra test-pack files and does not delete existing exports. SQL Preview identifies exported queries as standalone tests and reports their model and dialect.
+- Reuse the same SQL templates, check IDs, SQLGlot translation and SQLFluff validation as native quality gates. Live-data checks target published tables; `expected_rows` unit tests inline fixtures and run without staging, source setup or publication. Run all checks or select unit/data tests, returning a nonzero exit code for failures, missing prerequisites and malformed results.
+- Keep exporter selection separate from SQL dialect selection and the native execution DAG, reserving future exporters without emitting dbt files or a parallel compiler. Align the application, built-in specification, pinned schemas, examples and editor defaults to v0.8.4; the specification structure is unchanged.
+- Make tutorial setup safely repeatable and resumable in existing directories. Preserve edited files and source data, create and seed only missing resources, and check complete setup before enabling tutorial actions instead of treating a SQLite file alone as readiness.
+
 ## 0.8.3 - Product-owned generated deliverables (2026-11-08)
 
 - Generate one named folder per data product under the configured output root, keeping all of its models together. Explicit `--out` uses that common root even when source YAML files are in different subfolders.

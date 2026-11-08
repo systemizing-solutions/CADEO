@@ -18,7 +18,7 @@ from cade.services.product_service import ProductService
 from cade.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -78,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     compile_command.add_argument("--out", type=Path, help="Override YAML output directories (directory scans preserve subfolders)")
     compile_command.add_argument("--dialect", type=str.lower, default=None,
                                  help="Override the YAML dialect (default: YAML setting, then spark)")
+    compile_command.add_argument("--test-pack", choices=("none", "sql"), default="none",
+                                 help="Optional standalone test exporter (default: none)")
 
     build_command = commands.add_parser(
         "build", help="Compile and execute a product or project through SQLAlchemy in DAG order")
@@ -342,9 +344,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.spec.is_dir():
                 _, generated = projects.build(projects.load(args.spec), output=args.out,
                                               dialect=args.dialect,
+                                              test_pack=args.test_pack,
                                               on_warning=lambda message: print(f"Warning: {message}", file=sys.stderr))
             else:
                 generated = products.compile(args.spec, args.out, dialect=args.dialect,
+                    test_pack=args.test_pack,
                     on_warning=lambda message: print(f"Warning: {message}", file=sys.stderr))
             for path in generated:
                 print(f"Generated {path}")

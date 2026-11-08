@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.3.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.8.4.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -85,7 +85,11 @@ async function request(url, method = 'GET', data) {
   let payload;
   try { payload = await response.json(); }
   catch { throw new Error(`Unexpected response (${response.status})`); }
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(payload.error || `HTTP ${response.status}`);
+    error.issues = Array.isArray(payload.issues) ? payload.issues : [];
+    throw error;
+  }
   return payload;
 }
 // The currently selected *unsaved* document determines available checks.
@@ -148,7 +152,9 @@ function scheduleCheckRegistry(delay = 300) {
       if (sequence !== checkRegistrySequence || state.rawChanged) return;
       state.checkRegistry = [];
       state.checkRegistryStatus = 'unavailable';
-      state.checkRegistryError = error.message;
+      const detail = error.issues?.map(issue => `${issue.path}: ${issue.message}`).join('; ');
+      state.checkRegistryError = detail ? `${error.message}: ${detail}` : error.message;
+      status(`Check selection unavailable for ${pathSnapshot}: ${state.checkRegistryError}`, 'error');
     }
     refreshCheckSelectors();
   }, delay);
@@ -792,7 +798,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.3.schema.json' ? 'Bundled product schema (v0.8.3)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.8.4.schema.json' ? 'Bundled product schema (v0.8.4)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -895,7 +901,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.3',
+    spec_version: state.schema?.['x-schema-version'] || '0.8.4',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -1014,6 +1020,7 @@ async function runAction(explicitAction) {
       targets:el('targetInput').value.split(',').map(s=>s.trim()).filter(Boolean),
       profile:el('profileFlag').checked,database:el('databasePath').value.trim()||null
     };
+    if (action === 'compile') requestBody.test_pack = el('testPackExport').value;
     if (action === 'build') {
       const plan=await request('/api/action','POST',{...requestBody,action:'plan'});
       const steps=plan.plan?.steps||[];
@@ -1034,6 +1041,8 @@ async function runAction(explicitAction) {
     status(`${titleCase(action)} ${passed?'completed':'reported failures'}.`,passed?'success':'error', action==='compile'?null:result);
     if (action==='compile' && result.generated){
       await showSqlPreview(result.artifacts||[],result.generated);
+      if (result.test_packs?.length)
+        status(`Compile completed. SQL test packs: ${result.test_packs.join(', ')}`, 'success');
       if (state.revision!==revisionAtRequest){state.sqlStale=true;updateSqlState();}
     }
     if (action==='trace') showEngineeringResult(result);
@@ -1189,7 +1198,7 @@ async function renderSqlArtifact() {
     state.sqlContent[path]=result.content;
   }
   const text=state.sqlContent[path];
-  el('sqlArtifactMeta').textContent=`${artifact.product||'Data product'} · ${artifact.kind||'SQL'} · ${text.split('\n').length} lines`;
+  el('sqlArtifactMeta').textContent=`${artifact.product||'Data product'} · ${artifact.kind||'SQL'}${artifact.check_id ? ' · '+artifact.check_id : ''} · ${text.split('\n').length} lines`;
   el('sqlDialect').textContent=(artifact.dialect||'Unknown dialect').toUpperCase();
   el('sqlFilePath').textContent=path;
   el('sqlCode').innerHTML=window.DPCCode.sql(text);
@@ -1203,7 +1212,7 @@ async function showSqlPreview(artifacts, generated) {
   selector.replaceChildren();
   for (const artifact of artifacts) {
     const option=create('option');option.value=artifact.path;
-    option.textContent=`${artifact.product||'Product'} / ${artifact.kind} [${artifact.dialect||'?'}]`;
+    option.textContent=`${artifact.product||'Product'} / ${artifact.kind}${artifact.check_id ? ': '+artifact.check_id : ''} [${artifact.dialect||'?'}]`;
     selector.append(option);
   }
   // Load only the selected artifact, keeping project-wide previews lightweight.
@@ -1511,7 +1520,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.3.schema.json', false);
+    await activateSchema('schemas/product-v0.8.4.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

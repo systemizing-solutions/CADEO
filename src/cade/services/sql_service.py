@@ -268,9 +268,9 @@ class SqlTemplateService:
                 "(SELECT COUNT(*) FROM (SELECT * FROM __dp_expected_counts "
                 "EXCEPT SELECT * FROM __dp_actual_counts) AS missing_rows) AS failures;")
 
-    def _business_check(self, spec: Specification, test) -> str:
+    def _business_check(self, spec: Specification, test, target_name: str | None = None) -> str:
         d = test.definition
-        target = self.quote(self.staging_target(spec))
+        target = self.quote(target_name or self.staging_target(spec))
         column = self.quote("t." + d.get("column", "")) if "column" in d else None
         if test.type == "accepted_values":
             values = ", ".join(self.literal(value) for value in d["values"])
@@ -291,12 +291,12 @@ class SqlTemplateService:
             return self._expected_rows_check(spec, d)
         raise ValueError(f"Unexpected business test type: {test.type}")
 
-    def check_statements(self, spec: Specification) -> tuple[tuple[str, str], ...]:
+    def check_statements(self, spec: Specification, target_name: str | None = None) -> tuple[tuple[str, str], ...]:
         """Single authoritative registry of generated SQL checks and their stable IDs.
 
         Traceability, runtime results and SQL output all use these same IDs.
         """
-        target = self.quote(self.staging_target(spec))
+        target = self.quote(target_name or self.staging_target(spec))
         checks: list[tuple[str, str]] = []
         for attr in spec.canonical.attributes:
             if not attr.nullable:
@@ -335,7 +335,7 @@ class SqlTemplateService:
                            f"    GROUP BY {by} HAVING COUNT(*) > 1\n) AS ambiguous_winners;"))
         # One registry for generated checks and declarative business checks.
         # ExecutionService, CLI checks, traceability and verification read this list.
-        checks.extend((test.id, self._business_check(spec, test)) for test in spec.tests)
+        checks.extend((test.id, self._business_check(spec, test, target_name)) for test in spec.tests)
         result = tuple(checks)
         if len({identifier for identifier, _ in result}) != len(result):
             raise ValueError("Duplicate generated quality-check identifiers")

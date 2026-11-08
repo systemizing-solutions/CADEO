@@ -48,6 +48,7 @@ class ProductService:
         output: Path | None = None,
         dialect: str | None = None,
         on_warning: Callable[[str], None] | None = None,
+        test_pack: str = "none",
     ) -> list[Path]:
         """Compile a file or all YAML files in a folder, checking collisions first.
 
@@ -55,6 +56,8 @@ class ProductService:
         the current working directory. In directory mode the override is a common
         root; each product has its own named directory under that root.
         """
+        if test_pack not in ("none", "sql"):
+            raise SpecificationValidationError(f"Unknown test-pack exporter: {test_pack}")
         specifications = self.files.find_yaml_files(path)
         directory_mode = path.is_dir()
         planned: dict[Path, tuple[Path, str]] = {}
@@ -75,6 +78,10 @@ class ProductService:
                     spec_path, spec, path if directory_mode else None, output, warnings)
                 selected_dialect = self.output_dialect(spec_path, spec, dialect, warnings)
                 artifacts = self._render(spec, destination, DialectService.create(selected_dialect))
+                if test_pack == "sql":
+                    from cade.services.test_pack_service import TestPackService
+                    artifacts.update(TestPackService(self.files).render(
+                        spec, destination, DialectService.create(selected_dialect)))
                 for artifact_path, content in artifacts.items():
                     resolved = artifact_path.resolve()
                     if resolved in planned:

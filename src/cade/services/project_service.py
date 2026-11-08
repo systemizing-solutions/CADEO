@@ -161,12 +161,15 @@ class ProjectService:
     def build(self, project: Project, targets: tuple[str, ...] = (),
               output: Path | None = None, dialect: str | None = None,
               on_warning: Callable[[str], None] | None = None,
-              build_id: str | None = None) -> tuple[ProjectPlan, list[Path]]:
+              build_id: str | None = None,
+              test_pack: str = "none") -> tuple[ProjectPlan, list[Path]]:
         """Render the project DAG through the single SQLGlot generator.
 
         A build ID selects fresh stage/snapshot names for native execution.
         SQL execution is handled by the execution service, not this renderer.
         """
+        if test_pack not in ("none", "sql"):
+            raise SpecificationValidationError(f"Unknown test-pack exporter: {test_pack}")
         plan = self.plan(project, targets)
         wanted = set(plan.products)
         contents: dict[Path, tuple[str, str]] = {}
@@ -189,6 +192,10 @@ class ProjectService:
             warnings.extend(f"{path}: traceability: {message}" for message in trace["warnings"])
             artifacts = ProductService._render(
                 spec, destination, DialectService.create(selected_dialect, build_id=build_id))
+            if test_pack == "sql":
+                from cade.services.test_pack_service import TestPackService
+                artifacts.update(TestPackService(self.files).render(
+                    spec, destination, DialectService.create(selected_dialect)))
             local_plan = DependencyService().build(spec)
             for node in local_plan.nodes:
                 if node.artifact:

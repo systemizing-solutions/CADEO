@@ -7,8 +7,10 @@ SQLite needs no extra driver. Do not use a production database for this exercise
 
 Install CADE from the repository: `python -m pip install -e .`.
 For an installed release, use `python -m pip install cade`.
-Run `cade tutorial init`. This creates a new `tutorial` folder. It does not
-replace an existing folder. Run the printed `export` command in your terminal.
+Run `cade tutorial init`. This creates a `tutorial` folder or completes an
+existing partial setup. Existing contracts, notes, source tables and data are
+preserved; only missing resources are created. Running setup again is safe.
+Run the printed `export` command in your terminal.
 It sets the SQLite connection for the normal CLI commands below.
 
 Run these commands in order to reach the three proof states:

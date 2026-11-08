@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cade.org/schemas/product/0.8.3",
-  "title": "CADE: Contract-Driven Automation for Data Engineering: Multi-model specification v0.8.3",
+  "$id": "https://cade.org/schemas/product/0.8.4",
+  "title": "CADE: Contract-Driven Automation for Data Engineering: Multi-model specification v0.8.4",
   "description": "One data product containing multiple canonical entities, source-to-target mappings, quality gates and published tables. The six stage registries share stable model IDs.",
   "type": "object",
   "additionalProperties": false,
@@ -29,7 +29,7 @@
       "readOnly": true
     },
     "spec_version": {
-      "const": "0.8.3",
+      "const": "0.8.4",
       "type": "string",
       "description": "One multi-model specification language version."
     },
@@ -1520,5 +1520,5 @@
       "description": "A single canonical output attribute with its logical type, nullability and business requirement links."
     }
   },
-  "x-schema-version": "0.8.3"
+  "x-schema-version": "0.8.4"
 }

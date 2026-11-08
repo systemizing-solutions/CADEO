@@ -2,6 +2,258 @@
 import pytest
 
 
+@pytest.mark.parametrize('partial_database', [False, True])
+def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database):
+    import json
+    from cade.services.tutorial_service import TutorialService
+    from tests.support import sqlalchemy_connection
+
+    service = TutorialService()
+    root = tmp_path / 'tutorial'
+    (root / 'starter').mkdir(parents=True)
+    if partial_database:
+        with sqlalchemy_connection(root / 'tutorial.sqlite') as connection:
+            connection.exec_driver_sql('CREATE TABLE input_devices (device_id TEXT, merchant_id TEXT, service_id TEXT, status TEXT)')
+            connection.exec_driver_sql("INSERT INTO input_devices VALUES ('CUSTOM', 'M1', 'S1', 'LIVE')")
+    assert not service.ready(root)
+    service.create(root)
+    assert service.ready(root)
+    document = root / 'product/product.yaml'
+    document.write_text(document.read_text() + '\n# My edited tutorial contract\n')
+    schema = root / 'product.schema.json'
+    content = json.loads(schema.read_text())
+    content['title'] = 'My customized tutorial schema'
+    schema.write_text(json.dumps(content))
+    guide = root / 'README.md'
+    guide.write_text('My tutorial notes\n')
+    review = root / 'owner-review.json'
+    review.write_text('{"reviewer": "Owner"}\n')
+    original = {path: path.read_bytes() for path in (document, schema, guide, review)}
+    missing = root / 'wrong-status/product.yaml'
+    missing.unlink()
+    assert not service.ready(root)
+    service.create(root)
+    service.create(root)
+    assert missing.is_file()
+    assert service.ready(root)
+    assert all(path.read_bytes() == contents for path, contents in original.items())
+    with sqlalchemy_connection(root / 'tutorial.sqlite') as connection:
+        rows = connection.exec_driver_sql('SELECT device_id FROM input_devices ORDER BY device_id').fetchall()
+        assert [row[0] for row in rows] == (['CUSTOM'] if partial_database else ['D1', 'D2', 'D3'])
+        assert connection.exec_driver_sql('SELECT COUNT(*) FROM input_merchants').scalar_one() == 2
+        assert connection.exec_driver_sql('SELECT COUNT(*) FROM input_services').scalar_one() == 1
+
+
+def test_tutorial_init_endpoint_recovers_partial_example(tmp_path):
+    from cade.exposers.web import create_app
+    from cade.services.tutorial_service import TutorialService
+
+    root = tmp_path / 'tutorial'
+    (root / 'starter').mkdir(parents=True)
+    (root / 'tutorial.sqlite').touch()
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    assert client.get('/api/tutorial').get_json()['ready'] is False
+    for _ in range(2):
+        response = client.post('/api/tutorial', json={'action': 'init'},
+                               headers={'X-Editor-Token': token})
+        assert response.status_code == 200, response.get_json()
+        assert client.get('/api/tutorial').get_json()['ready'] is True
+    (root / 'starter/product.yaml').unlink()
+    assert client.get('/api/tutorial').get_json()['ready'] is False
+    response = client.post('/api/tutorial', json={'action': 'init'}, headers={'X-Editor-Token': token})
+    assert response.status_code == 200
+    assert TutorialService().ready(root)
+
+
+@pytest.mark.parametrize('document', [None, [], {'schema': {'path': 'missing.schema.json', 'version': '0.8.0'}}])
+def test_check_registry_rejection_logs_reason(tmp_path, caplog, document):
+    from cade.exposers.web import create_app
+
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    payload = [] if document == [] else {'path': 'broken.yaml', 'document': document}
+    response = client.post('/api/check-registry', json=payload, headers={'X-Editor-Token': token})
+    assert response.status_code == 422
+    assert response.get_json()['error'] in caplog.text
+    assert 'Check registry unavailable for' in caplog.text
+    if document:
+        assert 'broken.yaml' in caplog.text and 'missing.schema.json' in caplog.text
+
+
+@pytest.mark.parametrize('directory', [False, True])
+def test_standalone_sql_test_pack_export(tmp_path, directory):
+    import json
+    from pathlib import Path
+    from cade.exposers.cli import main
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.product_service import ProductService
+    from cade.services.specification_service import SpecificationService
+    from cade.services.sql_service import SqlTemplateService
+    from tests.support import write_document
+
+    files = FileBroker()
+    service = ProductService(files, SpecificationService(files))
+    example = Path(__file__).resolve().parents[1] / 'examples/sqlite_business_tests.yaml'
+    source = tmp_path / 'source/product.yaml'
+    write_document(source, service.specifications.read_document(example))
+    spec = service.validate(source).models[0]
+    output = tmp_path / 'generated'
+    argument = source.parent if directory else source
+    base = ['compile', str(argument), '--out', str(output), '--dialect', 'sqlite']
+    assert main(base) == 0
+    assert not list(output.rglob('manifest.json'))
+    assert main(base + ['--test-pack', 'sql']) == 0
+    manifest_path, = output.rglob('manifest.json')
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest_path.parent == output / spec.product.name.rsplit('.', 1)[0] / 'tests' / spec.product.name
+    assert [check['id'] for check in manifest['checks']] == [
+        identifier for identifier, _ in SqlTemplateService().check_statements(spec)]
+    assert manifest['dialect'] == 'sqlite'
+    for check in manifest['checks']:
+        sql = (manifest_path.parent / check['file']).read_text()
+        assert '__stage' not in sql
+        assert sql.strip().endswith(';')
+    assert main(base + ['--test-pack', 'none']) == 0
+    assert manifest_path.is_file()
+    with pytest.raises(Exception, match='Unknown test-pack exporter'):
+        service.compile(source, output, test_pack='dbt')
+
+
+@pytest.mark.parametrize('malformed_sql', [
+    'SELECT NULL AS failures;', 'SELECT -1 AS failures;',
+    'SELECT 0.5 AS failures;', 'SELECT 0 AS failures WHERE 1 = 0;',
+    'SELECT 0 AS failures UNION ALL SELECT 0 AS failures;',
+    'SELECT 0 AS unexpected;', 'SELECT 0 AS failures, 0 AS extra;',
+])
+def test_standalone_sql_test_pack_runner(tmp_path, malformed_sql):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    from sqlalchemy import create_engine
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.product_service import ProductService
+    from cade.services.specification_service import SpecificationService
+
+    files = FileBroker()
+    service = ProductService(files, SpecificationService(files))
+    example = Path(__file__).resolve().parents[1] / 'examples/sqlite_business_tests.yaml'
+    service.compile(example, tmp_path / 'generated', dialect='sqlite', test_pack='sql')
+    manifest_path, = (tmp_path / 'generated').rglob('manifest.json')
+    runner = manifest_path.parent / 'run.py'
+    database = tmp_path / 'test.sqlite'
+    environment = {**os.environ, 'PACK_DATABASE_URL': f'sqlite:///{database}'}
+
+    def run(*arguments):
+        completed = subprocess.run([sys.executable, '-I', str(runner),
+                                    '--url-env', 'PACK_DATABASE_URL', *arguments],
+                                   cwd=tmp_path, env=environment, capture_output=True, text=True)
+        return completed.returncode, json.loads(completed.stdout)
+
+    code, report = run('--kind', 'unit')
+    assert code == 0 and report['passed']
+    assert report['checks'][0]['id'] == 'merchant_mapping_fixture'
+    code, report = run()
+    assert code == 1 and not report['passed']
+    assert any('error' in check for check in report['checks'])
+    engine = create_engine(environment['PACK_DATABASE_URL'])
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE input_devices (asset_id TEXT, merchant_account_number TEXT, device_status TEXT)')
+        connection.exec_driver_sql('CREATE TABLE input_merchants (merchant_account_number TEXT, merchant_name TEXT)')
+        connection.exec_driver_sql("INSERT INTO input_devices VALUES ('d1', 'm1', 'active')")
+        connection.exec_driver_sql("INSERT INTO input_merchants VALUES ('m1', 'Merchant One')")
+        connection.exec_driver_sql('CREATE TABLE device_business_tests AS SELECT asset_id AS source_device_id, input_devices.merchant_account_number, device_status, merchant_name FROM input_devices LEFT JOIN input_merchants USING (merchant_account_number)')
+    code, report = run()
+    assert code == 0 and report['passed']
+    with engine.begin() as connection:
+        connection.exec_driver_sql("UPDATE device_business_tests SET device_status = 'invalid'")
+    code, report = run('--kind', 'data')
+    assert code == 1
+    assert next(check for check in report['checks'] if check['id'] == 'device_status_valid')['failures'] == 1
+    manifest = json.loads(manifest_path.read_text())
+    unit = next(check for check in manifest['checks'] if check['kind'] == 'unit')
+    (manifest_path.parent / unit['file']).write_text(malformed_sql)
+    code, report = run('--kind', 'unit')
+    assert code == 1 and 'error' in report['checks'][0]
+    engine.dispose()
+
+
+@pytest.mark.parametrize('dialect', ['sqlite', 'postgres', 'duckdb', 'spark'])
+def test_standalone_sql_test_pack_dialects(tmp_path, dialect):
+    import json
+    from pathlib import Path
+    from sqlglot import exp, parse
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.product_service import ProductService
+    from cade.services.specification_service import SpecificationService
+    from cade.services.dialect_service import DialectService
+    from cade.services.test_pack_service import TestPackService
+
+    files = FileBroker()
+    service = ProductService(files, SpecificationService(files))
+    example = Path(__file__).resolve().parents[1] / 'examples/sqlite_business_tests.yaml'
+    spec = service.validate(example).models[0]
+    artifacts = TestPackService(files).render(spec, tmp_path, DialectService.create(dialect))
+    for path, script in artifacts.items():
+        if path.suffix == '.sql':
+            statement, = parse(script, read=dialect)
+            assert isinstance(statement, exp.Query)
+    unit = next(check for check in json.loads(next(
+        script for path, script in artifacts.items() if path.name == 'manifest.json'))['checks']
+                if check['kind'] == 'unit')
+    unit_sql = next(script for path, script in artifacts.items() if path.name == unit['file'])
+    assert 'input_devices' not in unit_sql and 'input_merchants' not in unit_sql
+
+
+def test_standalone_sql_test_pack_cross_product(tmp_path):
+    import json
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.product_service import ProductService
+    from cade.services.project_service import ProjectService
+    from cade.services.specification_service import SpecificationService
+
+    files = FileBroker()
+    specifications = SpecificationService(files)
+    products = ProductService(files, specifications)
+    projects = ProjectService(files, specifications, products)
+    source = Path(__file__).resolve().parents[1] / 'examples/cross_product'
+    project = projects.load(source)
+    _, artifacts = projects.build(project, output=tmp_path, dialect='sqlite', test_pack='sql')
+    manifests = [path for path in artifacts if path.name == 'manifest.json']
+    assert len(manifests) == len(project.products)
+    assert {json.loads(path.read_text())['product'] for path in manifests} == {
+        name for name, _, _ in project.products}
+
+
+def test_standalone_sql_test_pack_multi_model(tmp_path):
+    import copy
+    import json
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.product_service import ProductService
+    from cade.services.specification_service import SpecificationService
+    from tests.support import write_document
+
+    files = FileBroker()
+    service = ProductService(files, SpecificationService(files))
+    example = Path(__file__).resolve().parents[1] / 'examples/sqlite_business_tests.yaml'
+    document = service.specifications.read_document(example)
+    for stage in ('model', 'mapping', 'assurance'):
+        document[stage]['entities']['second'] = copy.deepcopy(document[stage]['entities']['device'])
+    document['delivery']['targets']['second'] = {'table': 'second_devices'}
+    source = tmp_path / 'product.yaml'
+    write_document(source, document)
+    artifacts = service.compile(source, tmp_path / 'generated', dialect='sqlite', test_pack='sql')
+    manifests = [path for path in artifacts if path.name == 'manifest.json']
+    assert len(manifests) == 2
+    assert {json.loads(path.read_text())['target'] for path in manifests} == {
+        'device_business_tests', 'second_devices'}
+    assert len({path.parent for path in manifests}) == 2
+
+
 def test_ui_creates_missing_workspace(tmp_path, monkeypatch):
     from unittest.mock import Mock
     from flask import Flask
@@ -239,7 +491,9 @@ def test_generated_multi_model_and_project_layout(tmp_path):
         assert (destination / 'runs/layout-test/sql/transformations' / f'{name}.sql').is_file()
 
 
-def test_generated_layout_flask_compile_preview(tmp_path):
+@pytest.mark.parametrize('test_pack', [None, 'none', 'sql'])
+@pytest.mark.parametrize('directory', [False, True])
+def test_generated_layout_flask_compile_preview(tmp_path, test_pack, directory):
     from cade.exposers.web import create_app
     from cade.services.tutorial_service import TutorialService
     from tests.support import write_document
@@ -249,19 +503,57 @@ def test_generated_layout_flask_compile_preview(tmp_path):
     client = create_app(tmp_path).test_client()
     token = client.get('/api/bootstrap').get_json()['token']
     headers = {'X-Editor-Token': token}
-    response = client.post('/api/action', headers=headers, json={
-        'action': 'compile', 'path': 'product.yaml', 'out': 'generated', 'dialect': 'sqlite'})
+    payload = {'action': 'compile', 'path': '.' if directory else 'product.yaml',
+               'out': 'generated', 'dialect': 'sqlite'}
+    if test_pack is not None:
+        payload['test_pack'] = test_pack
+    response = client.post('/api/action', headers=headers, json=payload)
     assert response.status_code == 200, response.get_json()
     result = response.get_json()
     product = document['definition']['name']
-    assert all(path.startswith(f'generated/{product}/') for path in result['generated'])
-    assert {artifact['kind'] for artifact in result['artifacts']} == {
-        'preservation', 'transformation', 'reconciliation', 'quality checks', 'publication'}
+    shared_plans = {'generated/project.plan.json', 'generated/project.plan.mmd'} if directory else set()
+    assert all(path.startswith(f'generated/{product}/') or path in shared_plans
+               for path in result['generated'])
+    expected_kinds = {'preservation', 'transformation', 'reconciliation', 'quality checks', 'publication'}
+    if test_pack == 'sql':
+        expected_kinds.add('standalone test')
+        assert len(result['test_packs']) == len(document['model']['entities'])
+        for pack in result['test_packs']:
+            assert (tmp_path / pack / 'manifest.json').is_file()
+            assert (tmp_path / pack / 'run.py').is_file()
+    else:
+        assert result['test_packs'] == []
+        assert not list(tmp_path.rglob('manifest.json'))
+    assert {artifact['kind'] for artifact in result['artifacts']} == expected_kinds
     for artifact in result['artifacts']:
         assert artifact['product'].startswith(product + '.')
+        assert artifact['dialect'] == 'sqlite'
+        if artifact['kind'] == 'standalone test':
+            import json
+            check_path = tmp_path / artifact['path']
+            manifest = json.loads((check_path.parent / 'manifest.json').read_text())
+            assert artifact['check_id'] == next(check['id'] for check in manifest['checks']
+                                               if check['file'] == check_path.name)
         preview = client.get('/api/artifact', query_string={'path': artifact['path']}, headers=headers)
         assert preview.status_code == 200
         assert preview.get_json()['content'] == (tmp_path / artifact['path']).read_text()
+
+
+@pytest.mark.parametrize('test_pack', ['dbt', '', [], {}])
+def test_flask_rejects_unknown_test_pack(tmp_path, test_pack):
+    from cade.exposers.web import create_app
+    from cade.services.tutorial_service import TutorialService
+    from tests.support import write_document
+
+    write_document(tmp_path / 'product.yaml', TutorialService().document())
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    response = client.post('/api/action', headers={'X-Editor-Token': token}, json={
+        'action': 'compile', 'path': 'product.yaml', 'out': 'generated',
+        'dialect': 'sqlite', 'test_pack': test_pack})
+    assert response.status_code == 422
+    assert response.get_json()['error'] == 'test_pack must be none or sql'
+    assert not (tmp_path / 'generated').exists()
 
 
 def test_flask_draft_check_registry_matches_compiler(tmp_path):
@@ -276,7 +568,7 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     import yaml
     example=Path(__file__).resolve().parents[1]/'examples/multi_model'
     copy2(example/'product.yaml',tmp_path/'product.yaml')
-    copy2(example/'product.schema-v0.8.3.json',tmp_path/'product.schema-v0.8.3.json')
+    copy2(example/'product.schema-v0.8.4.json',tmp_path/'product.schema-v0.8.4.json')
     app=create_app(tmp_path)
     client=app.test_client()
     doc=yaml.safe_load((tmp_path/'product.yaml').read_text())
@@ -309,7 +601,7 @@ def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, cap
     assert main(['tutorial', 'init', str(root)]) == 0
     assert 'export CADE_TUTORIAL_DATABASE_URL=' in capsys.readouterr().out
     original = (root / 'product/product.yaml').read_bytes()
-    assert main(['tutorial', 'init', str(root)]) == 1
+    assert main(['tutorial', 'init', str(root)]) == 0
     assert (root / 'product/product.yaml').read_bytes() == original
     assert main(['build', str(root / 'starter/product.yaml')]) == 0
     product_reports = list((root / 'starter/generated').glob('*/runs/*/evidence/acceptance-results.md'))
@@ -352,7 +644,7 @@ def test_tutorial_ui_shared_workflow_and_local_guards(tmp_path, monkeypatch):
     assert not client.get('/api/tutorial').json['ready']
     assert client.post('/api/tutorial', json={'action': 'init'}).status_code == 403
     assert client.post('/api/tutorial', json={'action': 'init'}, headers=headers).status_code == 200
-    assert client.post('/api/tutorial', json={'action': 'init'}, headers=headers).status_code == 409
+    assert client.post('/api/tutorial', json={'action': 'init'}, headers=headers).status_code == 200
     assert client.get('/api/tutorial').json['ready']
     response = client.post('/api/tutorial', json={'action': 'report'}, headers=headers)
     assert response.status_code == 422 and 'Build the full product first' in response.json['error']
