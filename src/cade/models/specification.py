@@ -1,6 +1,7 @@
 """Immutable, platform-neutral intermediate representation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -226,9 +227,39 @@ class Specification:
     connections: tuple[Connection, ...] = ()
     execution: Execution | None = None
     tests: tuple[BusinessTest, ...] = ()
+    artifact_paths: "ArtifactPaths | None" = None
 
 class SpecificationValidationError(ValueError):
     """The declarative contract is invalid or unsafe to compile."""
+
+@dataclass(frozen=True)
+class ArtifactPaths:
+    sql: str = 'sql'
+    tests: str = 'tests'
+    plans: str = 'plans'
+    metadata: str = 'metadata'
+    lineage: str = 'lineage'
+    documentation: str = 'documentation'
+    project_plans: str = '.'
+    transformations: str | None = None
+    quality: str | None = None
+    preservation: str | None = None
+    publication: str | None = None
+
+    def __post_init__(self) -> None:
+        for descriptor in fields(self):
+            value = getattr(self, descriptor.name)
+            if value is None:
+                continue
+            if (not isinstance(value, str) or not value.strip() or '\\' in value
+                    or any(ord(character) < 32 for character in value)
+                    or PurePosixPath(value).is_absolute() or PureWindowsPath(value).drive):
+                raise SpecificationValidationError(
+                    f'delivery.artifact_paths.{descriptor.name}: use a nonempty relative directory with forward slashes')
+
+    def directory(self, role: str) -> str:
+        value = getattr(self, role)
+        return value if value is not None else str(PurePosixPath(self.sql) / role)
 
 @dataclass(frozen=True)
 class DataProduct:

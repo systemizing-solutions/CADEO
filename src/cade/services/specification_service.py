@@ -15,6 +15,7 @@ from yaml.constructor import ConstructorError
 from cade.brokers.file_broker import FileBrokerContract
 from cade.models.specification import (
     Attribute,
+    ArtifactPaths,
     AcceptanceCriterion,
     Business,
     Consumer,
@@ -85,7 +86,14 @@ class SpecificationService:
         self._validator = self._build_validator(self._schema_text)
         # A selected schema can narrow/describe the product contract, but cannot
         # silently authorize fields or expressions the compiler doesn't implement.
-        self._core_validator = self._build_validator(packaged)
+        core_schema = json.loads(packaged)
+        selected_schema = json.loads(self._schema_text)
+        selected_version = selected_schema.get('properties', {}).get('spec_version', {}).get('const')
+        if selected_version is not None and selected_version != core_schema['properties']['spec_version']['const']:
+            core_schema['properties']['spec_version']['const'] = selected_version
+            self._core_validator = self._build_validator(json.dumps(core_schema))
+        else:
+            self._core_validator = self._build_validator(packaged)
 
     @staticmethod
     @lru_cache(maxsize=4)
@@ -452,6 +460,7 @@ class SpecificationService:
             document["spec_version"], product, canonical, branches, dedup, reconciliation,
             preservation, business, tuple(sources.values()), operations, copy.deepcopy(public_document),
             relative_output, document.get("dialect"), connections, execution, declarative,
+            ArtifactPaths(**document.get('artifact_paths', {})),
         )
         from cade.services.dependency_service import DependencyService
         DependencyService().build(specification)  # Validate one model dependency DAG.

@@ -18,7 +18,7 @@ from cade.services.product_service import ProductService
 from cade.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.4"
+VERSION = "0.8.5"
 
 
 def main(argv: list[str] | None = None) -> int:

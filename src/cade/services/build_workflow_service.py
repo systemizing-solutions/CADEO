@@ -44,7 +44,7 @@ class BuildWorkflowService:
             on_warning=warnings.append)
         selected = {name: (spec_path, spec)
                     for name, spec_path, spec in project.products if name in plan.products}
-        manifest_dir = (output if output is not None else project.root / 'build') / run_id
+        manifest_dir = self.projects.plan_directory(project, plan.products, output, run_id)
         destination = report if report is not None else manifest_dir / 'run-manifest.json'
         if destination.suffix.lower() != '.json':
             raise SpecificationValidationError('--report must name a .json file')

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from cade.brokers.file_broker import FileBrokerContract
-from cade.models.specification import Specification
+from cade.models.specification import ArtifactPaths, Specification
 from cade.services.sqlglot_service import SqlGlotSqlService
 
 
@@ -14,7 +14,8 @@ class TestPackService:
 
     def render(self, spec: Specification, output: Path,
                sql: SqlGlotSqlService) -> dict[Path, str]:
-        directory = output / "tests" / spec.product.name
+        paths = spec.artifact_paths or ArtifactPaths()
+        directory = output / paths.tests / spec.product.name
         artifacts: dict[Path, str] = {}
         tests = {test.id: test for test in spec.tests}
         checks = []

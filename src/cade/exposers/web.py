@@ -103,11 +103,21 @@ def create_app(workspace: Path, *, overwrite: bool = False):
     def preflight_outputs(path: Path, override: Path | None,
                           products: ProductService, projects: ProjectService) -> None:
         """Prevent YAML output paths from writing outside the chosen workspace."""
+        from cade.models.specification import ArtifactPaths
+        from cade.services.dependency_service import DependencyService
         project_root = path if path.is_dir() else None
         for spec_path, spec in items(path, products, projects):
             destination = ProductService.output_directory(
                 spec_path, spec, project_root, override, [])
             inside(destination)
+            layout = spec.artifact_paths or ArtifactPaths()
+            for node in DependencyService().build(spec).nodes:
+                if node.artifact:
+                    inside(destination / node.artifact)
+            for role in ('tests', 'plans', 'metadata', 'lineage', 'documentation'):
+                inside(destination / layout.directory(role))
+            shared_root = override if override is not None else (path if path.is_dir() else path.parent) / 'build'
+            inside(shared_root / layout.project_plans)
         if override is not None:
             inside(override)
 
@@ -193,7 +203,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.4')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.8.5')
 
     @app.get('/tutorial')
     def tutorial_page():
@@ -748,16 +758,20 @@ def create_app(workspace: Path, *, overwrite: bool = False):
             owners = [(spec.product.name, ProductService.output_dialect(spec_path, spec, dialect, []))
                       for spec_path, spec in items(path, products, projects)]
             check_ids = {}
+            pack_directories = []
             for manifest_path in generated:
-                if manifest_path.name == 'manifest.json' and manifest_path.parent.parent.name == 'tests':
+                if manifest_path.name == 'manifest.json':
                     manifest = json.loads(files.read_text(manifest_path))
+                    if manifest.get('format') != 'cade.sql-test-pack':
+                        continue
+                    pack_directories.append(manifest_path.parent)
                     check_ids.update({(manifest_path.parent / check['file']).resolve(): check['id']
                                       for check in manifest['checks']})
             artifacts = []
             for generated_path in generated:
                 if generated_path.suffix.lower() != '.sql':
                     continue
-                standalone = generated_path.parent.parent.name == 'tests'
+                standalone = generated_path.resolve() in check_ids
                 matching = [item for item in owners if generated_path.name.startswith(item[0] + '.')
                             or (standalone and generated_path.parent.name == item[0])]
                 owner = max(matching, key=lambda item: len(item[0])) if matching else None
@@ -772,8 +786,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
                                   'check_id': check_ids.get(generated_path.resolve()),
                                   'grammar_checked': True})
             return jsonify(generated=[relative(p) for p in generated], artifacts=artifacts,
-                           test_packs=[relative(p.parent) for p in generated
-                                       if p.name == 'manifest.json' and p.parent.parent.name == 'tests'])
+                           test_packs=[relative(directory) for directory in pack_directories])
         if name == 'build':
             if data.get('confirm') is not True:
                 raise WorkspaceError('Explicit confirmation is required to execute a build')

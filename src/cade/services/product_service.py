@@ -1,12 +1,13 @@
 """Coordinates specification, generation, and local output persistence."""
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
 from cade.brokers.file_broker import FileBrokerContract
-from cade.models.specification import Specification, DataProduct, SpecificationValidationError
+from cade.models.specification import ArtifactPaths, Specification, DataProduct, SpecificationValidationError
 from cade.services.specification_service import SpecificationService
 from cade.services.sqlglot_service import SqlGlotSqlService
 from cade.services.dialect_service import DialectService
@@ -94,14 +95,16 @@ class ProductService:
             from cade.services.project_service import Project, ProjectService
             project = Project(spec_path.parent, tuple((m.product.name,spec_path,m) for m in bundle.models))
             product_plan = ProjectService(self.files,self.specifications,self).plan(project)
-            product_plan = replace(product_plan, nodes=tuple(
-                replace(node, artifact='../' + node.artifact) if node.artifact else node
-                for node in product_plan.nodes))
             destination = self.output_directory(
                 spec_path,bundle.models[0],path if directory_mode else None,output,[])
+            layout = bundle.models[0].artifact_paths or ArtifactPaths()
+            plan_directory = destination / layout.plans
+            product_plan = replace(product_plan, nodes=tuple(
+                replace(node, artifact=os.path.relpath(destination / node.artifact, plan_directory))
+                if node.artifact else node for node in product_plan.nodes))
             for artifact,contents in (
-                (destination / 'plans' / f'{bundle.name}.plan.json', json.dumps(product_plan.to_dict(),indent=2)+'\n'),
-                (destination / 'plans' / f'{bundle.name}.plan.mmd', product_plan.mermaid())):
+                (plan_directory / f'{bundle.name}.plan.json', json.dumps(product_plan.to_dict(),indent=2)+'\n'),
+                (plan_directory / f'{bundle.name}.plan.mmd', product_plan.mermaid())):
                 resolved = artifact.resolve()
                 if resolved in planned:
                     raise SpecificationValidationError(f'Output collision for combined product DAG: {artifact}')
@@ -156,17 +159,18 @@ class ProductService:
             if node.artifact is not None:
                 artifacts[output / node.artifact] = emitters[node.id]()
         name = specification.product.name
-        artifacts[output / 'metadata' / f"{name}.json"] = json.dumps(
+        paths = specification.artifact_paths or ArtifactPaths()
+        artifacts[output / paths.metadata / f"{name}.json"] = json.dumps(
             specification.definition, indent=2, ensure_ascii=False) + "\n"
         stored_plan = replace(plan, nodes=tuple(
-            replace(node, artifact='../' + node.artifact) if node.artifact else node
+            replace(node, artifact=os.path.relpath(output / node.artifact, output / paths.plans)) if node.artifact else node
             for node in plan.nodes))
-        artifacts[output / 'plans' / f"{name}.plan.json"] = json.dumps(
+        artifacts[output / paths.plans / f"{name}.plan.json"] = json.dumps(
             stored_plan.to_dict(), indent=2, ensure_ascii=False) + "\n"
-        artifacts[output / 'plans' / f"{name}.plan.mmd"] = plan.mermaid()
+        artifacts[output / paths.plans / f"{name}.plan.mmd"] = plan.mermaid()
         trace_service = TraceabilityService()
         trace = trace_service.build(specification)
-        artifacts[output / 'lineage' / f"{name}.lineage.json"] = json.dumps(
+        artifacts[output / paths.lineage / f"{name}.lineage.json"] = json.dumps(
             trace, indent=2, ensure_ascii=False) + "\n"
-        artifacts[output / 'documentation' / f"{name}.documentation.md"] = trace_service.markdown(specification, trace)
+        artifacts[output / paths.documentation / f"{name}.documentation.md"] = trace_service.markdown(specification, trace)
         return artifacts

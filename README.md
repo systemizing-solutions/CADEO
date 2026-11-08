@@ -1,5 +1,5 @@
 # CADE
-> Contract-Driven Automation for Data Engineering v0.8.4
+> Contract-Driven Automation for Data Engineering v0.8.5
 
 A **data product contains one or more published canonical models**, not just one table. One versioned YAML specification defines business requirements, multiple canonical entities, source contracts, one STTM per entity, assurance, and one publication target per entity. The JSON Schema drives both validation and the local Flask UI.
 
@@ -77,11 +77,11 @@ for its separate SQLite verification action, not a build-connection override.
 
 ## One product, multiple tables
 
-The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.4.json`](examples/multi_model/product.schema-v0.8.4.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
+The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.5.json`](examples/multi_model/product.schema-v0.8.5.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
 
 ```yaml
-schema: {path: product.schema-v0.8.4.json, version: "0.8.4"}
-spec_version: "0.8.4"
+schema: {path: product.schema-v0.8.5.json, version: "0.8.5"}
+spec_version: "0.8.5"
 
 definition:
   name: merchant_operations
@@ -192,7 +192,7 @@ All database operations, including SQLite, are executed through SQLAlchemy. The 
 ## Generated deliverables
 
 The output setting is a **root directory**, not a flat collection of files.
-CADE v0.8.4 creates one folder named after each product's `definition.name`.
+CADE v0.8.5 creates one folder named after each product's `definition.name`.
 All models belonging to that product stay together, with model-qualified
 filenames such as `merchant_operations.devices.checks.sql`.
 
@@ -233,12 +233,77 @@ combined `acceptance-results.md` in `<project-output-root>/<run-id>/` (by defaul
 report with a relative link to that manifest; `--report` can still select a
 different manifest location.
 
-The built-in YAML/JSON Schema version now matches app v0.8.4; its structure is
-unchanged. Existing specifications must update `spec_version`, `schema.version`,
-and `schema.path` to the corresponding v0.8.4 schema. Recompile
+The built-in YAML/JSON Schema version now matches app v0.8.5; its structure is
+extended only by optional `delivery.artifact_paths`. Compatible specifications
+pinned to the v0.8.4 schema remain valid: validation uses the selected schema's
+`spec_version` constraint, not the app release number. To use new v0.8.5 fields,
+update `spec_version`, `schema.version` and `schema.path` together to the v0.8.5
+schema. Recompile
 to produce the new layout and update consumers that hard-code flat paths. Use
 the artifact paths returned by compilation or emitted plans where possible.
 Existing flat output files and historical build runs are not moved or deleted.
+
+### Artifact directory controls
+
+Set **Deliver > Artifact directories** in the editor, or author
+`delivery.artifact_paths` in YAML. Omitted settings preserve today's layout:
+
+```yaml
+delivery:
+  output: ./generated
+  artifact_paths:
+    sql: sql
+    tests: tests
+    plans: plans
+    metadata: metadata
+    lineage: lineage
+    documentation: documentation
+    project_plans: .
+```
+
+All paths except `project_plans` are relative to the **product output folder**:
+`<delivery.output or --out>/<definition.name>`. `sql` supplies the default root
+for `transformations`, `quality`, `preservation` and `publication`; any of those
+four keys can override its directory independently, also relative to the product
+output folder. `tests` controls standalone packs, each retaining a model-qualified
+subfolder; it does not turn test export on. Use `--test-pack sql` or the UI export
+selector separately.
+
+For example, a compile-only layout beside your configured `generated` directory:
+
+```yaml
+delivery:
+  output: ./generated
+  artifact_paths:
+    sql: ../../target/cade/sql
+    transformations: ../../models/cade
+    quality: ../../target/cade/quality
+    tests: ../../tests/cade
+    plans: ../../target/cade/plans
+    metadata: ../../target/cade/metadata
+    lineage: ../../target/cade/lineage
+    documentation: ../../docs/cade
+    project_plans: ../target/cade/project
+```
+
+`project_plans` uses the **shared project output root** (`--out`, otherwise
+`<project>/build`), not a product folder. Its default `.` preserves the existing
+shared-plan location. All selected products must agree on it. Native builds add
+`<run-id>` beneath that location and keep their manifest and shared acceptance
+report there; model artifacts still live beneath each product's `runs/<run-id>`.
+For native builds, product directories must remain inside that run folder; use
+relative nested paths without escaping it. Parent-relative external layouts are
+for compile-only exports.
+
+Paths must be nonempty and relative, using forward slashes. Absolute paths,
+Windows drives, backslashes and control characters are rejected. The editor
+preflights all configured destinations and permits relocation only within its
+workspace. Plans and lineage references follow the actual emitted paths.
+No unused default folders are created. Existing exports are never moved or
+deleted when a setting changes; use the latest returned file list and manifests.
+These controls do **not** convert CADE SQL or packs into dbt-native models or
+unit tests. They let a future exporter use another layout without requiring
+the current hard-coded directory tree.
 
 ### Standalone SQL test packs
 
@@ -317,11 +382,11 @@ python -m pytest -q
 node --check src/cade/web/editor.js
 ```
 
-The v0.8.4 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
+The v0.8.5 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
 
 ### Notes
 
-- Version `0.8.4` is intentionally a **breaking** specification format; older YAML must be restructured into the four model-keyed registries. No dual parser is supplied.
+- The multi-model format introduced in `0.8.0` is intentionally **breaking** relative to older single-model YAML. Compatible pinned multi-model schemas remain usable; unsupported structures are still rejected. No dual parser is supplied.
 - Each `schema.path` is **relative to the YAML** and its version must equal the referenced JSON Schema's `x-schema-version`. Keep them together when sharing a product.
 - Runtime test results, credentials and publication history are never authored into YAML; they live in environment variables and run manifests.
 - Defining two canonical entities in one product does not automatically create a relationship. Declare logical relationships in `model.entities[model_id].relationships`, and explicitly implement physical joins in the model's STTM.

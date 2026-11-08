@@ -1,7 +1,7 @@
 schema:
-  path: schemas/product-v0.8.4.schema.json
-  version: 0.8.4
-spec_version: 0.8.4
+  path: schemas/product-v0.8.5.schema.json
+  version: 0.8.5
+spec_version: 0.8.5
 definition:
   name: device_inventory
   description: A local example

@@ -19,7 +19,7 @@ from cade.models.specification import SpecificationValidationError
 
 
 class SchemaCatalogService:
-    DEFAULT = "schemas/product-v0.8.4.schema.json"
+    DEFAULT = "schemas/product-v0.8.5.schema.json"
     VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
     DRAFT = "https://json-schema.org/draft/2020-12/schema"
 

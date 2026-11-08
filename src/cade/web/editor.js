@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.4.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.8.5.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -798,7 +798,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.4.schema.json' ? 'Bundled product schema (v0.8.4)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.8.5.schema.json' ? 'Bundled product schema (v0.8.5)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -822,6 +822,8 @@ async function activateSchema(choice, modified = true) {
   const selected = await request('/api/schema?path=' + encodeURIComponent(choice));
   state.schemaId = choice;
   state.schema = selected;
+  if (modified && selected.properties?.spec_version?.const && isObject(state.document))
+    state.document.spec_version = selected.properties.spec_version.const;
   el('schemaSelect').value = choice;
   el('schemaVersion').textContent = selected.title || selected['x-schema-version'] || 'Custom schema';
   syncSchemaReference();
@@ -901,7 +903,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.4',
+    spec_version: state.schema?.['x-schema-version'] || '0.8.5',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -1520,7 +1522,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.4.schema.json', false);
+    await activateSchema('schemas/product-v0.8.5.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

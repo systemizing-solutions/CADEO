@@ -171,6 +171,7 @@ class ProjectService:
         if test_pack not in ("none", "sql"):
             raise SpecificationValidationError(f"Unknown test-pack exporter: {test_pack}")
         plan = self.plan(project, targets)
+        manifest_dir = self.plan_directory(project, plan.products, output, build_id)
         wanted = set(plan.products)
         contents: dict[Path, tuple[str, str]] = {}
         artifact_paths: dict[tuple[str, str], Path] = {}
@@ -192,6 +193,10 @@ class ProjectService:
             warnings.extend(f"{path}: traceability: {message}" for message in trace["warnings"])
             artifacts = ProductService._render(
                 spec, destination, DialectService.create(selected_dialect, build_id=build_id))
+            if build_id is not None and any(
+                    not artifact.resolve().is_relative_to(destination.resolve()) for artifact in artifacts):
+                raise SpecificationValidationError(
+                    'Native builds require artifact_paths to stay within each product run directory')
             if test_pack == "sql":
                 from cade.services.test_pack_service import TestPackService
                 artifacts.update(TestPackService(self.files).render(
@@ -209,9 +214,6 @@ class ProjectService:
                     raise SpecificationValidationError(
                         f"Output collision: {contents[resolved][0]} and {name} both generate {filename}")
                 contents[resolved] = (name, text)
-        manifest_dir = output if output is not None else project.root / "build"
-        if build_id is not None:
-            manifest_dir = manifest_dir / build_id
         # Project artifacts contain paths relative to the project.plan.json folder,
         # so a runner needs no duplicate lookup of YAML output configuration.
         def output_node(node: DependencyNode) -> DependencyNode:
@@ -235,3 +237,16 @@ class ProjectService:
         for filename, (_, text) in contents.items():
             self.files.write_text(filename, text)
         return plan, list(contents)
+
+    @staticmethod
+    def plan_directory(project: Project, products: tuple[str, ...],
+                       output: Path | None, build_id: str | None = None) -> Path:
+        from cade.models.specification import ArtifactPaths
+        root = output if output is not None else project.root / 'build'
+        locations = {(root / (spec.artifact_paths or ArtifactPaths()).project_plans).resolve()
+                     for name, _, spec in project.products if name in products}
+        if len(locations) != 1:
+            raise SpecificationValidationError(
+                'All selected products must agree on delivery.artifact_paths.project_plans')
+        directory = next(iter(locations))
+        return directory / build_id if build_id is not None else directory

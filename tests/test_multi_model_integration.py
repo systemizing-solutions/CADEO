@@ -2,6 +2,218 @@
 import pytest
 
 
+def test_pinned_previous_schema_does_not_use_bundled_version(tmp_path):
+    import copy
+    import json
+    import yaml
+    from cade.brokers.file_broker import FileBroker
+    from cade.exposers.web import create_app
+    from cade.models.specification import SpecificationValidationError
+    from cade.services.specification_service import SpecificationService
+    from cade.services.tutorial_service import TutorialService
+    from tests.support import write_document
+
+    files = FileBroker()
+    bundled = json.loads(SpecificationService(files).schema_json())
+    old_schema = copy.deepcopy(bundled)
+    old_schema['$id'] = 'https://cade.org/schemas/product/0.8.4'
+    old_schema['x-schema-version'] = '0.8.4'
+    old_schema['properties']['spec_version']['const'] = '0.8.4'
+    old_schema['properties']['delivery']['properties'].pop('artifact_paths', None)
+    document = TutorialService().document(starter=True)
+    document['spec_version'] = '0.8.4'
+    path = tmp_path / 'product.yaml'
+    write_document(path, document)
+    schema_path = next(tmp_path.glob('product.schema-v*.json'))
+    schema_path.write_text(json.dumps(old_schema))
+    document['schema'] = {'path': schema_path.name, 'version': '0.8.4'}
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+    specifications = SpecificationService(files)
+    selected = specifications.for_file(path)
+    assert selected.findings(document) == []
+    assert specifications.load(path).definition['spec_version'] == '0.8.4'
+    invalid = copy.deepcopy(document)
+    invalid['spec_version'] = '0.8.5'
+    with pytest.raises(SpecificationValidationError, match="0.8.4.*expected"):
+        selected.parse(invalid)
+    invalid = copy.deepcopy(document)
+    invalid['delivery']['artifact_paths'] = {'sql': 'custom_sql'}
+    with pytest.raises(SpecificationValidationError, match='artifact_paths'):
+        selected.parse(invalid)
+    permissive = copy.deepcopy(old_schema)
+    permissive['additionalProperties'] = True
+    unsafe = copy.deepcopy(document)
+    unsafe['unsupported_field'] = True
+    with pytest.raises(SpecificationValidationError, match='unsupported_field'):
+        SpecificationService(files, json.dumps(permissive)).parse(unsafe)
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    headers = {'X-Editor-Token': token}
+    response = client.post('/api/validate', json={'document': document, 'path': path.name,
+                                                'schema': schema_path.name, 'scope': 'file'}, headers=headers)
+    assert response.status_code == 200 and response.get_json()['valid'], response.get_json()
+    response = client.post('/api/check-registry', json={'document': document, 'path': path.name,
+                                                      'schema': schema_path.name}, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    response = client.post('/api/action', json={'action': 'compile', 'path': path.name,
+                                              'schema': schema_path.name, 'out': 'generated',
+                                              'dialect': 'sqlite', 'test_pack': 'sql'}, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()['test_packs']
+
+
+def test_configurable_artifact_dependency_paths():
+    from dataclasses import replace
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.models.specification import ArtifactPaths
+    from cade.services.dependency_service import DependencyService
+    from cade.services.specification_service import SpecificationService
+
+    source = Path(__file__).resolve().parents[1] / 'examples/sqlite_devices.yaml'
+    spec = SpecificationService(FileBroker()).load(source).models[0]
+    custom = replace(spec, artifact_paths=ArtifactPaths(sql='queries', quality='assertions'))
+    artifacts = {node.id: node.artifact for node in DependencyService().build(custom).nodes}
+    assert artifacts['transform:canonical'].startswith('queries/transformations/')
+    assert artifacts['quality:checks'].startswith('assertions/')
+    assert artifacts['publish:product'].startswith('queries/publication/')
+
+
+@pytest.mark.parametrize('external', [False, True])
+def test_configurable_artifact_layout_compile_and_preview(tmp_path, external):
+    import json
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.exposers.web import create_app
+    from cade.services.product_service import ProductService
+    from cade.services.specification_service import SpecificationService
+    from tests.support import write_document
+
+    files = FileBroker()
+    service = ProductService(files, SpecificationService(files))
+    source = Path(__file__).resolve().parents[1] / 'examples/sqlite_business_tests.yaml'
+    document = service.specifications.read_document(source)
+    prefix = '../../relocated/' if external else 'custom/'
+    layout = {role: prefix + role for role in (
+        'sql', 'tests', 'plans', 'metadata', 'lineage', 'documentation')}
+    layout.update(transformations=prefix+'models', quality=prefix+'assertions',
+                  project_plans='../shared-plans')
+    document['delivery']['artifact_paths'] = layout
+    path = tmp_path / 'product.yaml'
+    write_document(path, document)
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    response = client.post('/api/action', headers={'X-Editor-Token': token}, json={
+        'action': 'compile', 'path': 'product.yaml', 'out': 'generated',
+        'dialect': 'sqlite', 'test_pack': 'sql'})
+    assert response.status_code == 200, response.get_json()
+    result = response.get_json()
+    destination = tmp_path / 'generated' / document['definition']['name']
+    for role in ('plans', 'metadata', 'lineage', 'documentation', 'tests'):
+        assert (destination / layout[role]).resolve().is_dir()
+        assert not (destination / role).exists()
+    assert not (destination / 'sql').exists()
+    generated = {(tmp_path / filename).resolve() for filename in result['generated']}
+    for filename in generated:
+        if filename.name.endswith('.plan.json'):
+            for node in json.loads(filename.read_text())['nodes']:
+                if node['artifact']:
+                    assert (filename.parent / node['artifact']).resolve() in generated
+    checks = [artifact for artifact in result['artifacts'] if artifact['kind'] == 'standalone test']
+    assert len(checks) == 9
+    assert all(artifact['check_id'] and artifact['dialect'] == 'sqlite' for artifact in checks)
+    assert len(result['test_packs']) == 1
+    for artifact in result['artifacts']:
+        preview = client.get('/api/artifact', query_string={'path': artifact['path']})
+        assert preview.status_code == 200
+    response = client.post('/api/action', headers={'X-Editor-Token': token}, json={
+        'action': 'compile', 'path': '.', 'out': 'generated', 'dialect': 'sqlite'})
+    assert response.status_code == 200, response.get_json()
+    project_plan = tmp_path / 'shared-plans/project.plan.json'
+    assert project_plan.is_file()
+    for node in json.loads(project_plan.read_text())['nodes']:
+        if node['artifact']:
+            assert (project_plan.parent / node['artifact']).resolve().is_file()
+
+
+@pytest.mark.parametrize('value', ['/tmp/escaped', 'C:/escaped', '\\server\\share', 'bad\\path', '', ' ', 'bad\npath'])
+def test_artifact_layout_rejects_invalid_paths(value):
+    from cade.models.specification import ArtifactPaths, SpecificationValidationError
+
+    with pytest.raises(SpecificationValidationError, match='artifact_paths'):
+        ArtifactPaths(tests=value)
+
+
+def test_artifact_layout_blocks_editor_escape_before_writes(tmp_path):
+    from cade.exposers.web import create_app
+    from cade.services.tutorial_service import TutorialService
+    from tests.support import write_document
+
+    document = TutorialService().document(starter=True)
+    document['delivery']['artifact_paths'] = {'metadata': '../../../escaped'}
+    write_document(tmp_path / 'product.yaml', document)
+    client = create_app(tmp_path).test_client()
+    token = client.get('/api/bootstrap').get_json()['token']
+    response = client.post('/api/action', headers={'X-Editor-Token': token}, json={
+        'action': 'compile', 'path': 'product.yaml', 'out': 'generated', 'dialect': 'sqlite'})
+    assert response.status_code == 422
+    assert not (tmp_path / 'generated').exists()
+
+
+def test_configurable_artifact_layout_native_build(tmp_path, monkeypatch):
+    import json
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.services.build_workflow_service import BuildWorkflowService
+    from cade.services.product_service import ProductService
+    from cade.services.project_service import ProjectService
+    from cade.services.specification_service import SpecificationService
+    from cade.services.tutorial_service import TutorialService
+    from tests.support import write_document
+
+    tutorial = TutorialService()
+    tutorial.create(tmp_path / 'tutorial')
+    path = tmp_path / 'tutorial/starter/product.yaml'
+    files = FileBroker()
+    specifications = SpecificationService(files)
+    products = ProductService(files, specifications)
+    document = specifications.read_document(path)
+    document['delivery']['artifact_paths'] = {
+        'sql': 'db/sql', 'plans': 'meta/plans', 'metadata': 'meta/ir',
+        'lineage': 'meta/lineage', 'documentation': 'docs', 'project_plans': 'coordination'}
+    write_document(path, document)
+    projects = ProjectService(files, specifications, products)
+    result = BuildWorkflowService(files, products, projects).build(path)
+    assert result['status'] == 'passed'
+    manifest = Path(result['manifest_path'])
+    assert manifest.parent.parent.name == 'coordination'
+    project_plan = manifest.parent / 'project.plan.json'
+    for node in json.loads(project_plan.read_text())['nodes']:
+        if node['artifact']:
+            assert (project_plan.parent / node['artifact']).resolve().is_file()
+    assert any('/meta/plans/' in str(path) for path in result['generated_files'])
+    assert any('/db/sql/' in str(path) for path in result['generated_files'])
+
+
+def test_artifact_layout_project_plan_agreement(tmp_path):
+    from dataclasses import replace
+    from pathlib import Path
+    from cade.brokers.file_broker import FileBroker
+    from cade.models.specification import ArtifactPaths, SpecificationValidationError
+    from cade.services.project_service import Project, ProjectService
+    from cade.services.specification_service import SpecificationService
+
+    spec = SpecificationService(FileBroker()).load(
+        Path(__file__).resolve().parents[1] / 'examples/sqlite_devices.yaml').models[0]
+    first = replace(spec, artifact_paths=ArtifactPaths(project_plans='one'))
+    second = replace(spec, artifact_paths=ArtifactPaths(project_plans='two'))
+    project = Project(tmp_path, (('first', tmp_path/'first.yaml', first),
+                                ('second', tmp_path/'second.yaml', second)))
+    with pytest.raises(SpecificationValidationError, match='must agree'):
+        ProjectService.plan_directory(project, ('first', 'second'), tmp_path)
+    assert ProjectService.plan_directory(project, ('first',), tmp_path) == (tmp_path/'one').resolve()
+
+
 @pytest.mark.parametrize('partial_database', [False, True])
 def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database):
     import json
@@ -568,7 +780,7 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     import yaml
     example=Path(__file__).resolve().parents[1]/'examples/multi_model'
     copy2(example/'product.yaml',tmp_path/'product.yaml')
-    copy2(example/'product.schema-v0.8.4.json',tmp_path/'product.schema-v0.8.4.json')
+    copy2(example/'product.schema-v0.8.5.json',tmp_path/'product.schema-v0.8.5.json')
     app=create_app(tmp_path)
     client=app.test_client()
     doc=yaml.safe_load((tmp_path/'product.yaml').read_text())

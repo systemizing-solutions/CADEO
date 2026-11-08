@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.5 - Configurable artifact directories (2026-11-08)
+
+- Honor the pinned schema's specification-version constraint during shared core validation instead of imposing the bundled app version. Compatible v0.8.4 schemas remain usable in CLI and editor workflows; mismatched pins, unsupported fields and structure still fail validation.
+- Add optional `delivery.artifact_paths` to the authoritative YAML/JSON Schema and the schema-driven editor. Keep the existing defaults for `sql`, `tests`, `plans`, `metadata`, `lineage` and `documentation`; allow independent SQL-role overrides for transformations, quality, preservation and publication. Explicit paths are relative to the product output folder, so compile-only exports can target other workspace folders without creating unused default directories.
+- Add a separate `project_plans` directory relative to the shared output root. Selected products must agree on that location; native run manifests remain beside their shared project plans. Rebase every stored model, product and project plan reference to its actual plan location and derive traceability paths from the same dependency planner.
+- Recognize SQL test packs by their authoritative manifests rather than a hard-coded `tests` folder. Preserve opt-in export, standalone check IDs and editor previews when packs are relocated. Preflight configured output directories in the editor; reject unsafe paths before writes and preserve native product-run isolation.
+- Align the application, specification, pinned schemas, examples and editor defaults to v0.8.5. Omitted layout settings retain the v0.8.4 layout. This configures CADE artifacts, not dbt-native compilation; existing output folders are not moved or deleted automatically.
+
 ## 0.8.4 - Opt-in standalone SQL test packs (2026-11-08)
 
 - Add `cade compile ... --test-pack sql` and the editor's **Compile test-pack export** selector for file and project compilation. Export one independent SQL query per authoritative check under `<output-root>/<product>/tests/<product.model>/`, with a versioned manifest, prerequisites and a compiler-independent SQLAlchemy runner. Default `--test-pack none` / **None** emits no extra test-pack files and does not delete existing exports. SQL Preview identifies exported queries as standalone tests and reports their model and dialect.

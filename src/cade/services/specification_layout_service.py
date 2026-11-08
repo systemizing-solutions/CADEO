@@ -43,7 +43,7 @@ def to_ir_fields(document: dict, model_id: str) -> dict:
     }
     for key in ('source','joins','filters','priority','unions','deduplicate'):
         if key in mapping: normalized[key]=copy.deepcopy(mapping[key])
-    for key in ('output','dialect','execution'):
+    for key in ('output','dialect','execution','artifact_paths'):
         if key in deliver: normalized[key]=copy.deepcopy(deliver[key])
     for branch in normalized.get('unions',[]):
         if 'fields' in branch: branch['mapping']=branch.pop('fields')
