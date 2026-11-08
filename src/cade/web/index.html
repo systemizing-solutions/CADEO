@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CADE: Contract-Driven Automation for Data Engineering — Editor</title>
+  <link rel="stylesheet" href="/assets/editor.css">
+  <script src="/assets/code-preview.js" defer></script>
+  <script src="/assets/lineage-graph.js" defer></script>
+  <script src="/assets/editor.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brandline"><span class="brand-mark">C</span><div><span class="eyebrow">CADE</span><h1 id="documentTitle">Data Product</h1><p id="documentSubtitle">Choose a specification or create a new one</p></div></div>
+      <div class="top-actions"><a href="/tutorial" class="btn secondary">Tutorial</a><button id="openWorkspaceTop" class="btn secondary" aria-controls="workspaceSidebar" aria-expanded="false">Workspace</button><span id="dirtyState" class="save-state">No document</span><button id="validateTop" class="btn secondary">Validate</button><button id="saveFile" class="btn primary">Save</button></div>
+    </header>
+    <button id="workspaceScrim" class="workspace-scrim hidden" aria-label="Close workspace sidebar"></button>
+    <aside id="workspaceSidebar" class="workspace-sidebar hidden" aria-label="Workspace files and database setup" aria-hidden="true">
+      <header class="workspace-sidebar-header">
+        <div><span class="eyebrow">WORKSPACE</span><h2>Files &amp; database</h2><p id="workspaceLabel"></p></div>
+        <button id="closeWorkspace" class="icon-button" aria-label="Close workspace sidebar">×</button>
+      </header>
+      <div class="workspace-sidebar-content">
+        <section class="workspace-group" aria-label="Specification files">
+          <div class="minor-heading">Specifications <button id="refreshFiles" class="icon-button" aria-label="Refresh specifications">↻</button></div>
+          <nav id="files" class="file-list" aria-label="YAML files"></nav>
+          <button id="newFile" class="btn secondary small">+ New specification</button>
+          <label class="btn secondary file-import small">Import YAML<input id="importFile" type="file" accept=".yaml,.yml" hidden></label>
+          <div class="action-field"><label for="filePath">YAML path</label><input id="filePath" spellcheck="false" placeholder="products/example.yaml"></div>
+          <button id="downloadYaml" class="btn secondary small">Export YAML</button>
+        </section>
+        <section class="workspace-group" aria-label="Schema and database setup">
+          <h3 class="workspace-section-heading">Schema</h3>
+          <div class="schema-panel"><label for="schemaSelect">Versioned JSON Schema</label><select id="schemaSelect"></select>
+            <label class="btn secondary file-import small">Import schema<input id="importSchemaFile" type="file" accept=".json,application/json" hidden></label>
+            <small>The YAML pins this schema and its version.</small>
+          </div>
+          <h3 class="workspace-section-heading">Database driver</h3>
+          <p class="workspace-note">Only needed for Build &amp; publish. Validation and SQL preview are offline.</p>
+          <label for="engineChoice">Driver for Build &amp; publish</label><select id="engineChoice"></select><small id="engineInfo"></small>
+          <button id="installEngine" class="btn secondary small" disabled>Install selected driver</button>
+          <small id="installStatus" aria-live="polite"></small>
+        </section>
+      </div>
+    </aside>
+    <div class="body-grid">
+      <aside class="sidebar" aria-label="Workflow navigation">
+        <button id="openWorkspace" class="workspace-toggle" aria-controls="workspaceSidebar" aria-expanded="false"><span>Workspace files &amp; setup</span><span class="workspace-toggle-arrow" aria-hidden="true">↗</span></button>
+        <div class="sidebar-title">WORKFLOW</div>
+        <nav id="workflow" class="workflow" aria-label="Data product stages"></nav>
+      </aside>
+      <main class="editor-pane" aria-label="Specification editor">
+        <div class="editor-heading"><div><h2 id="stageTitle">Define</h2><p id="stageDescription">Describe the outcome and requirements</p></div><span id="stageProgress" class="stage-progress">Step 1 of 6</span></div>
+        <section id="quickStart" class="quick-start" aria-label="Getting started">
+          <div class="quick-start-copy"><strong id="quickStartTitle">Build your first data product</strong><p id="quickStartText">Work through each stage to describe a product before validating or previewing it.</p></div>
+          <div id="quickStartSaveRow" class="quick-start-save hidden"><label for="quickStartPath">Save specification as</label><input id="quickStartPath" spellcheck="false" placeholder="my_product.yaml"></div>
+          <div class="quick-start-actions"><button id="quickStartAction" class="btn primary small">Continue to Model</button><button id="dismissQuickStart" class="icon-button" aria-label="Hide getting started guidance" title="Hide">×</button></div>
+        </section>
+        <div class="tabs" role="tablist">
+          <button id="formTab" class="tab selected" role="tab" aria-selected="true">Form</button>
+          <button id="diagramTab" class="tab" role="tab" aria-selected="false">Design diagrams</button>
+          <button id="yamlTab" class="tab" role="tab" aria-selected="false">YAML</button>
+          <button id="sqlTab" class="tab" role="tab" aria-selected="false">SQL Preview</button>
+          <button id="evidenceTab" class="tab" role="tab" aria-selected="false">Acceptance evidence</button>
+        </div>
+        <section id="formPanel" class="form-panel" role="tabpanel"><div id="modelSelector"></div><div id="mappingOverview"></div><div id="formRoot"></div></section>
+        <section id="diagramPanel" class="diagram-panel hidden" role="tabpanel"><div id="designView"></div></section>
+        <section id="yamlPanel" class="yaml-panel hidden" role="tabpanel">
+          <div class="editor-help">The complete YAML is the source of truth. Editing is preserved until you explicitly apply or save it. Press <kbd>Ctrl</kbd>+<kbd>Space</kbd> for schema field suggestions.</div>
+          <div class="code-editor"><pre id="yamlHighlight" class="yaml-highlight" aria-hidden="true"></pre><textarea id="yamlText" spellcheck="false" aria-label="Edit YAML specification"></textarea></div>
+          <div id="yamlSuggestions" class="suggestions hidden" role="listbox"></div>
+          <div class="yaml-diagnostic-heading"><strong>YAML diagnostics</strong><span id="yamlDiagnosticSummary" role="status" aria-live="polite">Not checked</span></div>
+          <div id="yamlDiagnostics" class="yaml-diagnostics" aria-live="polite"></div>
+          <div class="yaml-actions"><span id="yamlHint" class="description">JSON Schema completion uses the selected versioned contract.</span><button id="applyYaml" class="btn secondary">Apply YAML to form</button></div>
+        </section>
+        <section id="sqlPanel" class="sql-panel hidden" role="tabpanel">
+          <div class="sql-toolbar">
+            <div class="sql-picker"><label for="sqlArtifactSelect">Generated SQL artifact</label><select id="sqlArtifactSelect" aria-label="Choose SQL artifact"></select></div>
+            <div class="sql-actions"><span id="sqlDialect" class="sql-dialect">—</span><button id="copySql" class="btn secondary small">Copy SQL</button></div>
+          </div>
+          <div id="sqlPreviewState" class="sql-preview-state" role="status">Compile a specification to preview its generated SQL.</div>
+          <div id="sqlArtifactMeta" class="sql-artifact-meta"></div>
+          <div class="sql-file-row"><label>Generated file path</label><code id="sqlFilePath">—</code><button id="copySqlPath" class="btn secondary small">Copy path</button></div>
+          <div class="sql-code-view" aria-label="Generated SQL source"><pre id="sqlLineNumbers" aria-hidden="true"></pre><pre id="sqlCode" tabindex="0"></pre></div>
+          <details class="sql-files"><summary>All generated files and paths</summary><div id="sqlGeneratedFiles"></div></details>
+        </section>
+        <section id="evidencePanel" class="evidence-panel hidden" role="tabpanel" aria-label="Business acceptance and quality evidence">
+          <div class="evidence-toolbar">
+            <div><h3>Business acceptance &amp; data-quality evidence</h3><p class="description">The traceability matrix comes from the specification; results come only from a real run manifest.</p></div>
+            <button id="reloadEvidence" class="btn secondary small">Refresh evidence</button>
+          </div>
+          <div class="evidence-manifest-control"><label for="evidenceManifestPath">Run manifest (workspace-relative; leave blank for latest)</label>
+            <input id="evidenceManifestPath" spellcheck="false" placeholder="build/your-run-id/run-manifest.json">
+            <button id="copyEvidencePath" class="btn secondary small">Copy path</button></div>
+          <div id="evidenceState" class="evidence-state" role="status" aria-live="polite">Open this view to inspect traceability and available run evidence.</div>
+          <div id="evidenceSummary" class="evidence-summary"></div>
+          <div class="evidence-heading"><h3>Requirement → Feature → Acceptance criterion → Check</h3></div>
+          <div class="evidence-table-wrap"><table class="evidence-table" aria-label="Requirement and check traceability">
+            <thead><tr><th>Requirement</th><th>Feature</th><th>Acceptance criterion</th><th>Check</th><th>Result</th><th>Failures</th></tr></thead>
+            <tbody id="evidenceRows"></tbody></table></div>
+          <div class="evidence-two-column">
+            <section><h3>Reconciliation exceptions</h3><div id="evidenceReconciliation" class="evidence-list"></div></section>
+            <section><h3>Publication blockers</h3><div id="evidenceBlockers" class="evidence-list"></div></section>
+          </div>
+          <section class="evidence-additional"><h3>Coverage &amp; evidence notes</h3><div id="evidenceNotes" class="evidence-list"></div></section>
+        </section>
+      </main>
+      <aside class="inspector" aria-label="Design guidance and validation">
+        <div class="panel-title">Design health <span id="schemaVersion" class="schema-hint"></span></div>
+        <div id="healthSummary" class="health-list" aria-live="polite"></div>
+        <div class="divider"></div>
+        <div class="panel-title">Contextual guidance</div>
+        <p id="contextGuide" class="panel-desc">Complete the stage fields. Hover the field descriptions for guidance.</p>
+        <div class="divider"></div>
+        <div class="panel-title">Actions</div>
+        <div id="contextActions" class="context-actions"></div>
+        <div class="action-field"><label for="actionScope">Validation scope</label><select id="actionScope"><option value="file">Current specification (draft)</option><option value="project">Entire project (saved YAML)</option></select></div>
+        <input id="actionSelect" type="hidden" value="validate">
+        <button id="runAction" class="btn secondary hidden">Run action</button>
+        <details id="advancedActions" class="advanced-actions"><summary>Execution options</summary>
+          <div class="action-field"><label for="dialectOverride">Dialect override</label><input id="dialectOverride" placeholder="Use YAML dialect" list="dialectList"><datalist id="dialectList"></datalist></div>
+          <div class="action-field"><label for="outputOverride">Output override</label><input id="outputOverride" placeholder="Use YAML output"></div>
+          <div class="action-field"><label for="targetInput">Build target model IDs</label><input id="targetInput" placeholder="models: devices or merchant_operations.devices"></div>
+          <div class="action-field"><label><input id="profileFlag" type="checkbox"> Profile source data</label></div>
+          <div class="action-field"><label for="databasePath">Verification database</label><input id="databasePath" placeholder="data/demo.sqlite"></div>
+        </details>
+        <div class="divider"></div>
+        <div class="results-heading">Validation &amp; results <button class="text-button" id="clearResults">Clear</button></div>
+        <div id="status" class="status muted" role="status" aria-live="polite">No validation run yet.</div>
+        <div id="issues" class="issues" aria-live="polite"></div>
+        <pre id="results" class="results" aria-live="polite"></pre>
+        <div id="artifactPreview" class="artifact-preview"></div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

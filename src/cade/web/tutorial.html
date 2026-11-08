@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CADE Tutorial: Connection Support</title>
+  <link rel="stylesheet" href="/assets/editor.css">
+  <link rel="stylesheet" href="/assets/tutorial.css">
+  <script src="/assets/tutorial.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="brandline"><span class="brand-mark">C</span><div><span class="eyebrow">CADE / TUTORIAL</span><h1>Connection support</h1></div></div><nav class="top-actions"><a href="/tutorial/guide" class="btn secondary">Full guide &amp; CLI</a><a href="/" class="btn secondary">Editor</a></nav></header>
+  <main class="tutorial-layout">
+    <nav id="tutorialSteps" class="tutorial-steps" aria-label="Tutorial steps"></nav>
+    <div class="tutorial-work">
+      <p id="tutorialProgress" class="description"></p>
+      <section class="tutorial-step" data-step="0">
+        <h2>1. Start with one source</h2>
+        <p>Create local sample data. No database server or extra SQLite driver is needed.</p>
+        <p>Operations has three devices: D1, D2, and D3. Start with one source table and one output. Each output row represents one device ID.</p>
+        <div class="tutorial-actions"><button id="tutorialInit" class="btn primary">Create local example</button><a data-spec="starter" data-stage="delivery" class="btn secondary">Open starter</a><button data-build="starter" class="btn secondary">Build starter</button></div>
+        <p>Expect three rows in <code>tutorial_device</code>. M1 owns two devices. Do not use merchant ID as the device key.</p>
+      </section>
+      <section class="tutorial-step hidden" data-step="1">
+        <h2>2. Ask the data owner</h2>
+        <p>Review the meaning with Service Operations before you change a mapping. The sample email is not a real contact.</p>
+        <table><thead><tr><th>Ask the owner</th><th>Sample decision</th></tr></thead><tbody>
+          <tr><td>What does one connection row mean?</td><td>One current device-to-merchant-to-service link per device ID.</td></tr>
+          <tr><td>Does LIVE mean a successful payment?</td><td>No. LIVE means enabled. OFF means inactive.</td></tr>
+          <tr><td>What happens if service S9 is absent?</td><td>Keep D3 and S9. Leave the service name null.</td></tr>
+          <tr><td>Can M1 own two devices?</td><td>Yes. D1 and D2 must remain separate.</td></tr>
+        </tbody></table>
+        <p>Review the three expected rows in <code>owner_examples</code>. Do not change expected rows only to pass a test.</p>
+        <a data-spec="product" data-stage="assurance" class="btn secondary">Open owner examples</a>
+        <form id="ownerReview" class="tutorial-review">
+          <label for="reviewerName">Reviewer name</label><input id="reviewerName" required maxlength="200" autocomplete="name">
+          <label for="reviewDecisions">Agreed decisions and open questions</label><textarea id="reviewDecisions" required maxlength="4000" rows="4"></textarea>
+          <button class="btn secondary" type="submit">Record owner discussion</button>
+        </form>
+        <p>A saved note records your discussion. It is not automatic approval. For a solo exercise, enter your name and mark the decisions as sample assumptions.</p>
+      </section>
+      <section class="tutorial-step hidden" data-step="2">
+        <h2>3. Design the shared product</h2>
+        <p>Add merchant and service sources. Publish three related canonical models. Canonical means one agreed model for consumers.</p>
+        <table><thead><tr><th>Source</th><th>Output</th><th>One row means</th></tr></thead><tbody>
+          <tr><td>input_merchants</td><td>tutorial_merchant</td><td>One merchant ID</td></tr>
+          <tr><td>input_services</td><td>tutorial_service</td><td>One service ID</td></tr>
+          <tr><td>input_devices</td><td>tutorial_connection</td><td>One device connection</td></tr>
+        </tbody></table>
+        <p>The connection model reads the two canonical models through explicit <code>model_ref</code> dependencies. Use LEFT joins. Keep D3 visible when S9 has no service record.</p>
+        <p>The source owners are Operations, Merchant Operations, and Service Operations. Review their keys and columns before you build.</p>
+        <div class="tutorial-actions"><a data-spec="product" data-stage="mapping" class="btn secondary">Open full product</a><button id="tutorialPlan" class="btn secondary">Check build order</button><button id="tutorialDiscover" class="btn secondary">Check source data</button></div>
+        <p>Discovery can skip canonical inputs before the first build. Check source data again after the build. The 24-hour freshness promise needs separate operational evidence.</p>
+      </section>
+      <section class="tutorial-step hidden" data-step="3">
+        <h2>4. Check and publish</h2>
+        <p>Build the full product. Expect three connection rows. Key checks prevent duplicates. Reconciliation prevents unapproved row loss. Owner examples check meaning, not only SQL syntax.</p>
+        <div class="tutorial-actions"><button data-build="product" class="btn primary">Build full product</button><a data-spec="product" data-stage="assurance" class="btn secondary">Open acceptance evidence</a></div>
+        <p>In the editor, select <strong>Acceptance evidence</strong>. Check the real run manifest. A green test does not replace owner approval.</p>
+        <p>The schedule is metadata. CADE does not start a scheduler. The tutorial uses one SQLite database; it does not ingest remote data.</p>
+      </section>
+      <section class="tutorial-step hidden" data-step="4">
+        <h2>5. Use the support queue</h2>
+        <p>Find active connections with no service record. Expect one item: D3 at City Pharmacy, with service S9. Send it to Service Operations. Do not mark it inactive.</p>
+        <button id="tutorialReport" class="btn primary">Show support queue</button>
+        <p>Support can act without joining three source tables. The data engineer can reuse the canonical models, rerun the build, and keep evidence of each check.</p>
+        <p>This queue does not measure revenue or prove payment success.</p>
+      </section>
+      <section class="tutorial-step hidden" data-step="5">
+        <h2>6. Test wrong mappings</h2>
+        <p>Build the full product first. Each exercise uses a separate contract. The published product must remain unchanged.</p>
+        <table><thead><tr><th>Wrong mapping</th><th>Business effect</th><th>First failed gate</th></tr></thead><tbody>
+          <tr><td>Use merchant ID as connection ID</td><td>D1 and D2 have the same key.</td><td>canonical_key_unique</td></tr>
+          <tr><td>Map OFF to active</td><td>D3 leaves the support queue.</td><td>owner_examples</td></tr>
+          <tr><td>Use an INNER service join</td><td>D3 disappears because S9 is absent.</td><td>reconciliation</td></tr>
+        </tbody></table>
+        <div class="tutorial-actions"><label for="tutorialCase">Exercise</label><select id="tutorialCase"><option value="wrong-key">Wrong key</option><option value="wrong-status">Wrong status</option><option value="inner-join">INNER service join</option></select><button id="tutorialExercise" class="btn primary">Run wrong mapping</button></div>
+        <p>The build stops at the first failed check. Later checks can remain not run. Accepted-value checks alone cannot detect a reversed status rule.</p>
+        <p>To repair a real error, agree the rule with the owner, fix the mapping, rerun the checks, and keep the new evidence.</p>
+        <p>For PostgreSQL, DuckDB, other drivers, CLI commands, and cleanup, open <a href="/tutorial/guide">Full guide &amp; CLI</a>.</p>
+      </section>
+      <section class="tutorial-result" aria-label="Tutorial results"><p id="tutorialStatus" role="status" aria-live="polite">Loading local tutorial...</p><pre id="tutorialResult"></pre></section>
+      <footer class="tutorial-footer"><button id="tutorialBack" class="btn secondary">Previous</button><button id="tutorialNext" class="btn primary">Next</button></footer>
+    </div>
+  </main>
+</body>
+</html>

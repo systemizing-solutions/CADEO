@@ -1,0 +1,186 @@
+schema:
+  path: schemas/product-v0.8.0.schema.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: device_business_tests
+  description: Declarative business assertions with a join and transformation fixtures
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: Device status and merchant relationships are valid, with correct
+        fixture transformations
+      check_ids:
+      - device/not_null:source_device_id
+      - device/not_null:device_status
+      - device/canonical_key_unique
+      - device/join_unique:0:merchants
+      - device/reconciliation
+      - device/device_status_valid
+      - device/merchant_exists
+      - device/active_device_has_merchant
+      - device/merchant_mapping_fixture
+model:
+  entities:
+    device:
+      entity_name: Device
+      record_grain: One row per source device ID
+      unique_key_attributes:
+      - source_device_id
+      attributes:
+        source_device_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_account_number:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+        device_status:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_name:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+sources:
+  connections:
+    warehouse:
+      url_env: DPC_EXECUTION_DATABASE_URL
+  datasets:
+    d:
+      connection: warehouse
+      table: input_devices
+      alias: d
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account_number:
+          type: string
+          nullable: true
+        device_status:
+          type: string
+          nullable: false
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    merchants:
+      connection: warehouse
+      table: input_merchants
+      alias: m
+      columns:
+        merchant_account_number:
+          type: string
+          nullable: false
+        merchant_name:
+          type: string
+          nullable: false
+      record_key_columns:
+      - merchant_account_number
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+mapping:
+  entities:
+    device:
+      source: d
+      joins:
+      - type: left
+        source: merchants
+        'on':
+        - left:
+            column: d.merchant_account_number
+          right:
+            column: m.merchant_account_number
+      fields:
+        source_device_id:
+          column: d.asset_id
+        merchant_account_number:
+          column: d.merchant_account_number
+        device_status:
+          column: d.device_status
+        merchant_name:
+          column: m.merchant_name
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    device:
+      reconciliation:
+        allow: []
+      preservation:
+        mode: external
+        reference: Bronze backups are retained by the warehouse ingestion service
+      tests:
+        device_status_valid:
+          type: accepted_values
+          column: device_status
+          values:
+          - active
+          - inactive
+          - retired
+        merchant_exists:
+          type: relationships
+          column: merchant_account_number
+          source: merchants
+          field: merchant_account_number
+        active_device_has_merchant:
+          type: expression
+          predicate:
+            or:
+            - ne:
+              - column: t.device_status
+              - literal: active
+            - is_not_null:
+                column: t.merchant_account_number
+        merchant_mapping_fixture:
+          type: expected_rows
+          inputs:
+            d:
+            - asset_id: d1
+              merchant_account_number: m1
+              device_status: active
+            merchants:
+            - merchant_account_number: m1
+              merchant_name: Merchant One
+          expected:
+          - source_device_id: d1
+            merchant_account_number: m1
+            device_status: active
+            merchant_name: Merchant One
+delivery:
+  execution:
+    connection: warehouse
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    device:
+      table: device_business_tests

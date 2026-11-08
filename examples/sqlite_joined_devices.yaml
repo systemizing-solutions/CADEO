@@ -1,0 +1,152 @@
+schema:
+  path: schemas/product-v0.8.0.schema.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: joined_device_inventory
+  description: Device inventory enriched using two LEFT joins
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: The canonical keys are non-null, unique, and source reconciliations
+        pass
+      check_ids:
+      - device/not_null:source_device_id
+      - device/canonical_key_unique
+      - device/join_unique:0:fa
+      - device/join_unique:0:p
+      - device/snapshot:0:d
+      - device/snapshot:0:fa
+      - device/snapshot:0:p
+      - device/reconciliation
+model:
+  entities:
+    device:
+      entity_name: Device
+      record_grain: One row per device
+      unique_key_attributes:
+      - source_device_id
+      attributes:
+        source_device_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_account_number:
+          type: string
+          requirement_ids:
+          - REQ_001
+        product_name:
+          type: string
+          requirement_ids:
+          - REQ_001
+sources:
+  datasets:
+    d:
+      table: input_devices
+      alias: d
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account_number:
+          type: string
+          nullable: true
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    fa:
+      table: asset_scope
+      alias: fa
+      columns:
+        source_asset_id:
+          type: string
+          nullable: false
+        product_service_id:
+          type: string
+          nullable: true
+      record_key_columns:
+      - source_asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    p:
+      table: product_service
+      alias: p
+      columns:
+        product_service_id:
+          type: string
+          nullable: false
+        product_name:
+          type: string
+          nullable: true
+      record_key_columns:
+      - product_service_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+mapping:
+  entities:
+    device:
+      source: d
+      joins:
+      - type: left
+        'on':
+        - left:
+            column: d.asset_id
+          right:
+            column: fa.source_asset_id
+        expect_unique: true
+        source: fa
+      - type: left
+        'on':
+        - left:
+            column: fa.product_service_id
+          right:
+            column: p.product_service_id
+        expect_unique: true
+        source: p
+      fields:
+        source_device_id:
+          column: d.asset_id
+        merchant_account_number:
+          column: d.merchant_account_number
+        product_name:
+          column: p.product_name
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    device:
+      reconciliation:
+        allow: []
+      preservation:
+        mode: snapshot
+delivery:
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    device:
+      table: joined_device_inventory

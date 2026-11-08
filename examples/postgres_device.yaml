@@ -1,0 +1,254 @@
+schema:
+  path: schemas/product-v0.8.0.schema.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: device_product
+  description: Example of the joined device mapping rendered for PostgreSQL
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: The canonical keys are non-null, unique, and source reconciliations
+        pass
+      check_ids:
+      - device/not_null:device_id
+      - device/not_null:merchant_account_number
+      - device/not_null:agreement_status
+      - device/not_null:source_system
+      - device/not_null:updated_at
+      - device/not_null:is_active
+      - device/canonical_key_unique
+      - device/join_unique:0:sc
+      - device/snapshot:0:d
+      - device/snapshot:0:sc
+      - device/snapshot:1:f
+      - device/reconciliation
+      - device/deduplication_ties
+model:
+  entities:
+    device:
+      entity_name: Device
+      record_grain: One row per device ID across systems
+      unique_key_attributes:
+      - device_id
+      attributes:
+        device_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_account_number:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        agreement_status:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        source_system:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        updated_at:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        is_active:
+          type: boolean
+          nullable: false
+          requirement_ids:
+          - REQ_001
+sources:
+  datasets:
+    d:
+      table: devices
+      alias: d
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account:
+          type: string
+          nullable: true
+        sub_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          nullable: true
+        unmapped_payload:
+          type: string
+          nullable: true
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    sc:
+      table: agreement_scope
+      alias: sc
+      columns:
+        agreement_scope_id:
+          type: string
+          nullable: false
+        agreement_type:
+          type: string
+          nullable: true
+        original_notes:
+          type: string
+          nullable: true
+      record_key_columns:
+      - agreement_scope_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    f:
+      table: fallback_devices
+      alias: f
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          nullable: true
+        unmapped_notes:
+          type: string
+          nullable: true
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+mapping:
+  entities:
+    device:
+      source: d
+      joins:
+      - type: left
+        'on':
+        - left:
+            concat:
+            - literal: 'crm:'
+            - column: d.sub_id
+          right:
+            column: sc.agreement_scope_id
+        expect_unique: true
+        source: sc
+      filters:
+      - eq:
+        - column: d.status
+        - literal: active
+      priority: 10
+      unions:
+      - source: f
+        priority: 20
+        filters:
+        - eq:
+          - column: f.status
+          - literal: active
+        fields:
+          device_id:
+            column: f.asset_id
+          merchant_account_number:
+            coalesce:
+            - column: f.merchant_account
+            - literal: UNKNOWN
+          agreement_status:
+            literal: unknown
+          source_system:
+            literal: fallback
+          updated_at:
+            column: f.updated_at
+          is_active:
+            literal: true
+      deduplicate:
+        by:
+        - device_id
+        order_by:
+        - field: updated_at
+          direction: desc
+      fields:
+        device_id:
+          column: d.asset_id
+        merchant_account_number:
+          coalesce:
+          - column: d.merchant_account
+          - literal: UNKNOWN
+        agreement_status:
+          case:
+            when:
+            - if:
+                is_not_null:
+                  column: sc.agreement_scope_id
+              then:
+                literal: contracted
+            else:
+              literal: uncontracted
+        source_system:
+          literal: primary
+        updated_at:
+          column: d.updated_at
+        is_active:
+          case:
+            when:
+            - if:
+                eq:
+                - column: d.status
+                - literal: active
+              then:
+                literal: true
+            else:
+              literal: false
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    device:
+      reconciliation:
+        allow:
+        - filtered
+        - deduplicated
+      preservation:
+        mode: snapshot
+delivery:
+  output: ./generated
+  dialect: postgres
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    device:
+      table: device_product

@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cade"
+version = "0.8.0"
+description = "Contract-driven, schema-validated data product specifications with automated SQL compilation to standardize and simplify data engineering."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0,<7",
+    "jsonschema>=4.20,<5",
+    "sqlglot>=30.27.0,<31",
+    "sqlfluff>=4.3.0,<5",
+    "SQLAlchemy>=2.0,<3",
+    "Flask>=3.1,<4"
+]
+license = "MIT"
+
+[project.optional-dependencies]
+duckdb = ["duckdb-sqlalchemy"]
+postgresql = ["psycopg[binary]"]
+mysql = ["pymysql"]
+mariadb = ["mariadb"]
+oracle = ["oracledb"]
+mssql = ["pyodbc"]
+actian = ["sqlalchemy-ingres"]
+athena = ["pyathena"]
+aurora-dsql = ["aurora-dsql-sqlalchemy"]
+dynamodb = ["pydynamodb"]
+redshift = ["sqlalchemy-redshift"]
+drill = ["sqlalchemy-drill"]
+druid = ["pydruid"]
+hive-presto = ["PyHive"]
+solr = ["sqlalchemy-solr"]
+clickhouse = ["clickhouse-sqlalchemy"]
+cockroachdb = ["sqlalchemy-cockroachdb"]
+cratedb = ["sqlalchemy-cratedb"]
+databend = ["databend-sqlalchemy"]
+databricks = ["databricks-sqlalchemy"]
+denodo = ["denodo-sqlalchemy"]
+exasol = ["sqlalchemy_exasol"]
+elasticsearch = ["elasticsearch-dbapi"]
+firebird = ["sqlalchemy-firebird"]
+firebolt = ["firebolt-sqlalchemy"]
+bigquery = ["sqlalchemy-bigquery"]
+gsheets = ["gsheets"]
+greenplum = ["sqlalchemy-greenplum"]
+hsqldb = ["sqlalchemy-hsqldb"]
+db2-informix = ["ibm-db-sa"]
+netezza = ["nzalchemy"]
+impala = ["impyla"]
+kinetica = ["sqlalchemy-kinetica"]
+access = ["sqlalchemy-access"]
+mssql-pytds = ["sqlalchemy-pytds"]
+mssql-turbodbc = ["sqlalchemy-turbodbc"]
+mimer = ["sqlalchemy-mimer"]
+monetdb = ["sqlalchemy-monetdb"]
+mongodb = ["pymongosql"]
+oceanbase = ["oceanbase-sqlalchemy"]
+opengauss = ["openGauss-sqlalchemy"]
+redis = ["adbc-driver-redis[sqlalchemy]"]
+rockset = ["rockset-sqlalchemy"]
+sybase = ["sqlalchemy-sybase"]
+hana = ["sqlalchemy-hana"]
+sqlany = ["sqlalchemy-sqlany"]
+snowflake = ["snowflake-sqlalchemy"]
+teradata = ["teradatasqlalchemy"]
+tidb = ["sqlalchemy-tidb"]
+ydb = ["ydb-sqlalchemy"]
+yugabyte = ["sqlalchemy-yugabytedb"]
+
+[project.scripts]
+cade = "cade.exposers.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cade = ["templates/*.yaml", "templates/*.md", "schemas/*.json", "web/*.html", "web/*.js", "web/*.css"]

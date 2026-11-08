@@ -1,0 +1,129 @@
+schema:
+  path: product.schema-v0.8.0.json
+  version: "0.8.0"
+spec_version: "0.8.0"
+definition:
+  name: merchant_operations
+  description: One data product publishing linked Merchant and Device canonical tables.
+  owner:
+    team: Data Engineering
+    contact: platform@example.org
+  consumers:
+    - id: analytics
+      purpose: Analyze merchants and their devices
+      access: read
+  outcome: Provide consistent merchant and device information to downstream users.
+  requirements:
+    - id: REQ_001
+      statement: Publish accurate, traceable merchant and device records.
+  features:
+    - id: FEAT_001
+      description: Publish related canonical datasets with tested keys and references.
+      requirement_ids: [REQ_001]
+      acceptance_criteria:
+        - id: AC_001
+          statement: Both models have unique keys and valid device-to-merchant references.
+          check_ids:
+            - merchants/not_null:merchant_id
+            - merchants/canonical_key_unique
+            - devices/not_null:device_id
+            - devices/canonical_key_unique
+            - devices/merchant_exists
+model:
+  entities:
+    merchants:
+      entity_name: Merchant
+      record_grain: One row per merchant
+      unique_key_attributes: [merchant_id]
+      attributes:
+        merchant_id: {type: string, nullable: false, requirement_ids: [REQ_001]}
+        merchant_name: {type: string, nullable: true, requirement_ids: [REQ_001]}
+    devices:
+      entity_name: Device
+      record_grain: One row per registered physical device
+      unique_key_attributes: [device_id]
+      relationships:
+        - attribute: merchant_id
+          entity: Merchant
+          related_attribute: merchant_id
+          cardinality: many_to_one
+      attributes:
+        device_id: {type: string, nullable: false, requirement_ids: [REQ_001]}
+        merchant_id: {type: string, nullable: false, requirement_ids: [REQ_001]}
+        merchant_name: {type: string, nullable: true, requirement_ids: [REQ_001]}
+        device_status: {type: string, nullable: false, requirement_ids: [REQ_001]}
+sources:
+  connections:
+    warehouse:
+      url_env: DPC_EXECUTION_DATABASE_URL
+  datasets:
+    raw_merchants:
+      table: raw_merchants
+      alias: m0
+      connection: warehouse
+      columns:
+        merchant_id: {type: string, nullable: false}
+        merchant_name: {type: string, nullable: true}
+      record_key_columns: [merchant_id]
+      contract: {owner: Data Engineering, freshness_hours: 24}
+    raw_devices:
+      table: raw_devices
+      alias: d
+      connection: warehouse
+      columns:
+        device_id: {type: string, nullable: false}
+        merchant_id: {type: string, nullable: false}
+        device_status: {type: string, nullable: false}
+      record_key_columns: [device_id]
+      contract: {owner: Data Engineering, freshness_hours: 24}
+    published_merchants:
+      model_ref: merchants
+      alias: m
+mapping:
+  entities:
+    merchants:
+      source: raw_merchants
+      fields:
+        merchant_id: {column: m0.merchant_id}
+        merchant_name: {column: m0.merchant_name}
+    devices:
+      source: raw_devices
+      joins:
+        - type: left
+          source: published_merchants
+          expect_unique: true
+          on:
+            - left: {column: d.merchant_id}
+              right: {column: m.merchant_id}
+      fields:
+        device_id: {column: d.device_id}
+        merchant_id: {column: d.merchant_id}
+        merchant_name: {column: m.merchant_name}
+        device_status: {column: d.device_status}
+assurance:
+  quality: {on_failure: block}
+  entities:
+    merchants:
+      reconciliation: {allow: []}
+      preservation: {mode: external, reference: raw_merchants}
+    devices:
+      reconciliation: {allow: []}
+      preservation: {mode: external, reference: raw_devices}
+      tests:
+        merchant_exists:
+          type: relationships
+          column: merchant_id
+          source: published_merchants
+          field: merchant_id
+delivery:
+  targets:
+    merchants: {table: canonical_merchants}
+    devices: {table: canonical_devices}
+  output: ./generated
+  dialect: sqlite
+  execution: {connection: warehouse}
+  refresh: {schedule: '0 5 * * *', timezone: UTC}
+  recovery:
+    strategy: rerun
+    max_attempts: 2
+    runbook: https://example.org/runbooks/merchant-operations

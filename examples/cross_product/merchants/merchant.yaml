@@ -1,0 +1,104 @@
+schema:
+  path: ../schemas/product-v0.8.0.schema.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: merchant_inventory
+  description: Simple merchant inventory
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: The canonical keys are non-null, unique, and source reconciliations
+        pass
+      check_ids:
+      - merchant/not_null:merchant_id
+      - merchant/canonical_key_unique
+      - merchant/reconciliation
+model:
+  entities:
+    merchant:
+      entity_name: Merchant
+      record_grain: One row per merchant
+      unique_key_attributes:
+      - merchant_id
+      attributes:
+        merchant_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_name:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+sources:
+  connections:
+    warehouse:
+      url_env: DPC_EXECUTION_DATABASE_URL
+  datasets:
+    s:
+      connection: warehouse
+      table: raw_merchants
+      alias: s
+      columns:
+        merchant_id:
+          type: string
+          nullable: false
+        merchant_name:
+          type: string
+          nullable: true
+      record_key_columns:
+      - merchant_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+mapping:
+  entities:
+    merchant:
+      source: s
+      fields:
+        merchant_id:
+          column: s.merchant_id
+        merchant_name:
+          column: s.merchant_name
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    merchant:
+      reconciliation:
+        allow: []
+      preservation:
+        mode: external
+        reference: bronze://raw_merchants
+delivery:
+  output: ./build
+  dialect: sqlite
+  execution:
+    connection: warehouse
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    merchant:
+      table: merchant_inventory

@@ -1,0 +1,382 @@
+{
+  "source": "https://docs.sqlalchemy.org/en/21/dialects/",
+  "catalogued_on": "2026-11-05",
+  "engines": [
+    {
+      "id": "mariadb",
+      "label": "MariaDB",
+      "kind": "included",
+      "url_driver": "mariadb+mariadbconnector",
+      "install": "mariadb",
+      "sqlglot_dialect": "mysql"
+    },
+    {
+      "id": "mssql",
+      "label": "Microsoft SQL Server",
+      "kind": "included",
+      "url_driver": "mssql+pyodbc",
+      "install": "pyodbc",
+      "sqlglot_dialect": "tsql"
+    },
+    {
+      "id": "mysql",
+      "label": "MySQL",
+      "kind": "included",
+      "url_driver": "mysql+pymysql",
+      "install": "pymysql",
+      "sqlglot_dialect": "mysql"
+    },
+    {
+      "id": "oracle",
+      "label": "Oracle Database",
+      "kind": "included",
+      "url_driver": "oracle+oracledb",
+      "install": "oracledb",
+      "sqlglot_dialect": "oracle"
+    },
+    {
+      "id": "postgresql",
+      "label": "PostgreSQL",
+      "kind": "included",
+      "url_driver": "postgresql+psycopg",
+      "install": "psycopg[binary]",
+      "sqlglot_dialect": "postgres"
+    },
+    {
+      "id": "sqlite",
+      "label": "SQLite",
+      "kind": "included",
+      "url_driver": "sqlite",
+      "install": null,
+      "sqlglot_dialect": "sqlite"
+    },
+    {
+      "id": "actian",
+      "label": "Actian Data Platform / Vector / Actian X / Ingres",
+      "kind": "external",
+      "url_driver": "ingres",
+      "install": "sqlalchemy-ingres"
+    },
+    {
+      "id": "athena",
+      "label": "Amazon Athena",
+      "kind": "external",
+      "url_driver": "awsathena+rest",
+      "install": "pyathena"
+    },
+    {
+      "id": "aurora-dsql",
+      "label": "Amazon Aurora DSQL",
+      "kind": "external",
+      "url_driver": "auroradsql",
+      "install": "aurora-dsql-sqlalchemy"
+    },
+    {
+      "id": "dynamodb",
+      "label": "Amazon DynamoDB",
+      "kind": "external",
+      "url_driver": "dynamodb",
+      "install": "pydynamodb"
+    },
+    {
+      "id": "redshift",
+      "label": "Amazon Redshift",
+      "kind": "external",
+      "url_driver": "redshift+psycopg2",
+      "install": "sqlalchemy-redshift"
+    },
+    {
+      "id": "drill",
+      "label": "Apache Drill",
+      "kind": "external",
+      "url_driver": "drill+sadrill",
+      "install": "sqlalchemy-drill"
+    },
+    {
+      "id": "druid",
+      "label": "Apache Druid",
+      "kind": "external",
+      "url_driver": "druid",
+      "install": "pydruid"
+    },
+    {
+      "id": "hive-presto",
+      "label": "Apache Hive / Presto",
+      "kind": "external",
+      "url_driver": "hive",
+      "install": "PyHive"
+    },
+    {
+      "id": "solr",
+      "label": "Apache Solr",
+      "kind": "external",
+      "url_driver": "solr",
+      "install": "sqlalchemy-solr"
+    },
+    {
+      "id": "clickhouse",
+      "label": "ClickHouse",
+      "kind": "external",
+      "url_driver": "clickhouse",
+      "install": "clickhouse-sqlalchemy"
+    },
+    {
+      "id": "cockroachdb",
+      "label": "CockroachDB",
+      "kind": "external",
+      "url_driver": "cockroachdb",
+      "install": "sqlalchemy-cockroachdb"
+    },
+    {
+      "id": "cratedb",
+      "label": "CrateDB",
+      "kind": "external",
+      "url_driver": "crate",
+      "install": "sqlalchemy-cratedb"
+    },
+    {
+      "id": "databend",
+      "label": "Databend",
+      "kind": "external",
+      "url_driver": "databend",
+      "install": "databend-sqlalchemy"
+    },
+    {
+      "id": "databricks",
+      "label": "Databricks",
+      "kind": "external",
+      "url_driver": "databricks",
+      "install": "databricks-sqlalchemy",
+      "note": "Python and DBR versions must be checked against Databricks dialect requirements."
+    },
+    {
+      "id": "denodo",
+      "label": "Denodo",
+      "kind": "external",
+      "url_driver": "denodo",
+      "install": "denodo-sqlalchemy"
+    },
+    {
+      "id": "duckdb",
+      "label": "DuckDB",
+      "kind": "external",
+      "url_driver": "duckdb",
+      "install": "duckdb-sqlalchemy",
+      "sqlglot_dialect": "duckdb",
+      "note": "Uses duckdb-sqlalchemy; native build requires a successful transaction/DDL rollback preflight."
+    },
+    {
+      "id": "elasticsearch",
+      "label": "Elasticsearch (read only)",
+      "kind": "external",
+      "url_driver": "elasticsearch",
+      "install": "elasticsearch-dbapi",
+      "note": "Read-only dialect: native publication is unavailable."
+    },
+    {
+      "id": "exasol",
+      "label": "EXASolution",
+      "kind": "external",
+      "url_driver": "exa",
+      "install": "sqlalchemy_exasol"
+    },
+    {
+      "id": "firebird",
+      "label": "Firebird",
+      "kind": "external",
+      "url_driver": "firebird",
+      "install": "sqlalchemy-firebird"
+    },
+    {
+      "id": "firebolt",
+      "label": "Firebolt",
+      "kind": "external",
+      "url_driver": "firebolt",
+      "install": "firebolt-sqlalchemy"
+    },
+    {
+      "id": "bigquery",
+      "label": "Google BigQuery",
+      "kind": "external",
+      "url_driver": "bigquery",
+      "install": "sqlalchemy-bigquery"
+    },
+    {
+      "id": "gsheets",
+      "label": "Google Sheets",
+      "kind": "external",
+      "url_driver": "gsheets",
+      "install": "gsheets"
+    },
+    {
+      "id": "greenplum",
+      "label": "Greenplum",
+      "kind": "external",
+      "url_driver": "greenplum",
+      "install": "sqlalchemy-greenplum"
+    },
+    {
+      "id": "hsqldb",
+      "label": "HyperSQL",
+      "kind": "external",
+      "url_driver": "hsqldb",
+      "install": "sqlalchemy-hsqldb"
+    },
+    {
+      "id": "db2-informix",
+      "label": "IBM DB2 / Informix",
+      "kind": "external",
+      "url_driver": "db2",
+      "install": "ibm-db-sa"
+    },
+    {
+      "id": "netezza",
+      "label": "IBM Netezza Performance Server",
+      "kind": "external",
+      "url_driver": "netezza",
+      "install": "nzalchemy",
+      "note": "SQLAlchemy documentation reports support for SQLAlchemy 1.3 only; this project requires SQLAlchemy 2.x."
+    },
+    {
+      "id": "impala",
+      "label": "Impala",
+      "kind": "external",
+      "url_driver": "impala",
+      "install": "impyla"
+    },
+    {
+      "id": "kinetica",
+      "label": "Kinetica",
+      "kind": "external",
+      "url_driver": "kinetica",
+      "install": "sqlalchemy-kinetica"
+    },
+    {
+      "id": "access",
+      "label": "Microsoft Access (pyodbc)",
+      "kind": "external",
+      "url_driver": "access+pyodbc",
+      "install": "sqlalchemy-access"
+    },
+    {
+      "id": "mssql-pytds",
+      "label": "Microsoft SQL Server (python-tds)",
+      "kind": "external",
+      "url_driver": "mssql+pytds",
+      "install": "sqlalchemy-pytds"
+    },
+    {
+      "id": "mssql-turbodbc",
+      "label": "Microsoft SQL Server (turbodbc)",
+      "kind": "external",
+      "url_driver": "mssql+turbodbc",
+      "install": "sqlalchemy-turbodbc"
+    },
+    {
+      "id": "mimer",
+      "label": "Mimer SQL",
+      "kind": "external",
+      "url_driver": "mimer",
+      "install": "sqlalchemy-mimer"
+    },
+    {
+      "id": "monetdb",
+      "label": "MonetDB",
+      "kind": "external",
+      "url_driver": "monetdb",
+      "install": "sqlalchemy-monetdb"
+    },
+    {
+      "id": "mongodb",
+      "label": "MongoDB",
+      "kind": "external",
+      "url_driver": "mongodb",
+      "install": "pymongosql"
+    },
+    {
+      "id": "oceanbase",
+      "label": "OceanBase",
+      "kind": "external",
+      "url_driver": "oceanbase",
+      "install": "oceanbase-sqlalchemy"
+    },
+    {
+      "id": "opengauss",
+      "label": "OpenGauss",
+      "kind": "external",
+      "url_driver": "opengauss",
+      "install": "openGauss-sqlalchemy"
+    },
+    {
+      "id": "redis",
+      "label": "Redis (ADBC)",
+      "kind": "external",
+      "url_driver": "redis",
+      "install": "adbc-driver-redis[sqlalchemy]",
+      "note": "Redis ADBC transactions are not supported; native publication is unavailable."
+    },
+    {
+      "id": "rockset",
+      "label": "Rockset",
+      "kind": "external",
+      "url_driver": "rockset",
+      "install": "rockset-sqlalchemy"
+    },
+    {
+      "id": "sybase",
+      "label": "SAP ASE",
+      "kind": "external",
+      "url_driver": "sybase",
+      "install": "sqlalchemy-sybase"
+    },
+    {
+      "id": "hana",
+      "label": "SAP HANA",
+      "kind": "external",
+      "url_driver": "hana",
+      "install": "sqlalchemy-hana"
+    },
+    {
+      "id": "sqlany",
+      "label": "SAP SQL Anywhere",
+      "kind": "external",
+      "url_driver": "sqlany",
+      "install": "sqlalchemy-sqlany"
+    },
+    {
+      "id": "snowflake",
+      "label": "Snowflake",
+      "kind": "external",
+      "url_driver": "snowflake",
+      "install": "snowflake-sqlalchemy"
+    },
+    {
+      "id": "teradata",
+      "label": "Teradata Vantage",
+      "kind": "external",
+      "url_driver": "teradata",
+      "install": "teradatasqlalchemy"
+    },
+    {
+      "id": "tidb",
+      "label": "TiDB",
+      "kind": "external",
+      "url_driver": "tidb",
+      "install": "sqlalchemy-tidb"
+    },
+    {
+      "id": "ydb",
+      "label": "YDB",
+      "kind": "external",
+      "url_driver": "ydb",
+      "install": "ydb-sqlalchemy"
+    },
+    {
+      "id": "yugabyte",
+      "label": "YugabyteDB",
+      "kind": "external",
+      "url_driver": "yugabytedb",
+      "install": "sqlalchemy-yugabytedb"
+    }
+  ]
+}

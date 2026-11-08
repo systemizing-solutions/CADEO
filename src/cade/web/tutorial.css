@@ -1,0 +1,13 @@
+.tutorial-layout{display:grid;grid-template-columns:210px minmax(0,780px);gap:36px;max-width:1150px;margin:32px auto;padding:0 24px;letter-spacing:0}
+.tutorial-steps{display:grid;align-content:start;gap:8px;position:sticky;top:24px}
+.tutorial-steps button{border:0;border-left:3px solid transparent;background:transparent;text-align:left;padding:12px;color:var(--muted);line-height:1.4}
+.tutorial-steps button[aria-current=step]{border-color:var(--green);background:#e9f7ef;color:var(--ink);font-weight:700}
+.tutorial-work{min-width:0}.tutorial-step{min-height:360px}.tutorial-step h2{font-size:22px;margin:16px 0}.tutorial-step p{line-height:1.65;max-width:70ch}
+.tutorial-step table{width:100%;border-collapse:collapse;font-size:13px;margin:22px 0;table-layout:fixed}
+.tutorial-step th,.tutorial-step td{text-align:left;vertical-align:top;padding:12px 8px;border-bottom:1px solid var(--border);overflow-wrap:anywhere}.tutorial-step th{background:#eef3f7}
+.tutorial-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:22px 0}.tutorial-actions select{padding:9px;border:1px solid var(--border);border-radius:6px;max-width:100%}
+.tutorial-review{display:grid;gap:9px;margin:24px 0;max-width:580px}.tutorial-review input,.tutorial-review textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:white}.tutorial-review button{justify-self:start}
+.tutorial-result{border-top:1px solid var(--border);margin-top:24px;padding-top:12px}.tutorial-result pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;font-size:12px;line-height:1.6;background:#edf2f5;padding:14px;border-radius:6px}.tutorial-result pre:empty{display:none}
+.tutorial-footer{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding:20px 0;margin-top:24px}.tutorial-guide{max-width:1000px;margin:24px auto;padding:20px}.tutorial-guide pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.7}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;border-radius:8px}.tutorial-work .btn{border-radius:8px;white-space:normal;text-align:center}.tutorial-work code{overflow-wrap:anywhere}
+@media(max-width:690px){.tutorial-layout{grid-template-columns:1fr;gap:16px;padding:0 16px;margin:20px auto}.tutorial-steps{position:static;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.tutorial-steps button{font-size:12px;padding:8px}.tutorial-step{min-height:0}.tutorial-step h2{font-size:20px}.tutorial-step th,.tutorial-step td{font-size:12px;padding:10px 5px}.tutorial-actions{align-items:stretch}.tutorial-guide{padding:16px;margin:0}.top-actions{flex-wrap:wrap}}

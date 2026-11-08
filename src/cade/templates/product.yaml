@@ -1,0 +1,114 @@
+schema:
+  path: product.schema-v0.8.0.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: device_inventory
+  description: Corporate acquiring device inventory
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: The canonical keys are non-null, unique, and source reconciliations
+        pass
+      check_ids:
+      - device/not_null:source_system
+      - device/not_null:source_device_id
+      - device/canonical_key_unique
+      - device/snapshot:0:s
+      - device/reconciliation
+model:
+  entities:
+    device:
+      entity_name: Device
+      record_grain: One row per source system and source device ID
+      unique_key_attributes:
+      - source_system
+      - source_device_id
+      attributes:
+        source_system:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        source_device_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_account_number:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+sources:
+  connections:
+    warehouse:
+      url_env: CADE_DATABASE_URL
+  datasets:
+    s:
+      connection: warehouse
+      table: silver.dim_device_corporate_acquiring_latest
+      alias: s
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account_number:
+          type: string
+          nullable: true
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+mapping:
+  entities:
+    device:
+      source: s
+      fields:
+        source_system:
+          literal: corporate_acquiring
+        source_device_id:
+          column: s.asset_id
+        merchant_account_number:
+          column: s.merchant_account_number
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    device:
+      reconciliation:
+        allow: []
+      preservation:
+        mode: snapshot
+      tests: {}
+delivery:
+  output: ./generated
+  dialect: spark
+  execution:
+    connection: warehouse
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    device:
+      table: gold.device_inventory

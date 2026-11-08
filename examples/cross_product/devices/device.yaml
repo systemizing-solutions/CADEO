@@ -1,0 +1,138 @@
+schema:
+  path: ../schemas/product-v0.8.0.schema.json
+  version: 0.8.0
+spec_version: 0.8.0
+definition:
+  name: device_inventory
+  description: Corporate acquiring device inventory
+  owner:
+    team: Data Platform Team
+    contact: data-platform@example.org
+  consumers:
+  - id: analytics
+    purpose: Read the published canonical data product
+    access: read
+  outcome: Provide trusted, reconciled canonical records for downstream consumers
+  requirements:
+  - id: REQ_001
+    statement: Deliver an accurate, traceable canonical data product
+  features:
+  - id: FEAT_001
+    description: Publish a reliable canonical view
+    requirement_ids:
+    - REQ_001
+    acceptance_criteria:
+    - id: AC_001
+      statement: The canonical keys are non-null, unique, and source reconciliations
+        pass
+      check_ids:
+      - device/not_null:source_system
+      - device/not_null:source_device_id
+      - device/canonical_key_unique
+      - device/reconciliation
+      - device/join_unique:0:merchants
+model:
+  entities:
+    device:
+      entity_name: Device
+      record_grain: One row per source system and source device ID
+      unique_key_attributes:
+      - source_system
+      - source_device_id
+      relationships:
+      - attribute: merchant_account_number
+        entity: Merchant
+        related_attribute: merchant_id
+        cardinality: many_to_one
+      attributes:
+        source_system:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        source_device_id:
+          type: string
+          nullable: false
+          requirement_ids:
+          - REQ_001
+        merchant_account_number:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+        merchant_name:
+          type: string
+          nullable: true
+          requirement_ids:
+          - REQ_001
+sources:
+  connections:
+    warehouse:
+      url_env: DPC_EXECUTION_DATABASE_URL
+  datasets:
+    s:
+      connection: warehouse
+      table: raw_devices
+      alias: s
+      columns:
+        asset_id:
+          type: string
+          nullable: false
+        merchant_account_number:
+          type: string
+          nullable: true
+      record_key_columns:
+      - asset_id
+      contract:
+        owner: Data Platform Team
+        freshness_hours: 24
+    merchants:
+      product_ref: merchant_inventory.merchant
+      alias: m
+mapping:
+  entities:
+    device:
+      source: s
+      joins:
+      - type: left
+        source: merchants
+        'on':
+        - left:
+            column: s.merchant_account_number
+          right:
+            column: m.merchant_id
+        expect_unique: true
+      fields:
+        source_system:
+          literal: corporate_acquiring
+        source_device_id:
+          column: s.asset_id
+        merchant_account_number:
+          column: s.merchant_account_number
+        merchant_name:
+          column: m.merchant_name
+assurance:
+  quality:
+    on_failure: block
+  entities:
+    device:
+      reconciliation:
+        allow: []
+      preservation:
+        mode: external
+        reference: bronze://raw_devices
+delivery:
+  output: ./build
+  dialect: sqlite
+  execution:
+    connection: warehouse
+  refresh:
+    schedule: 0 5 * * *
+    timezone: Africa/Johannesburg
+  recovery:
+    strategy: rerun
+    max_attempts: 3
+    runbook: https://example.org/runbooks/device-inventory
+  targets:
+    device:
+      table: device_inventory
