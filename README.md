@@ -1,78 +1,147 @@
-# CADE
-> Contract-Driven Automation for Data Engineering v0.8.5
+# CADEO
+**CADEO:** **C**ontract-driven **A**utomation for **D**ata **E**ngineering & **O**rchestration helps take a data product from
+business requirements to validated SQL with quality checks, publication and evidence.
 
-A **data product contains one or more published canonical models**, not just one table. One versioned YAML specification defines business requirements, multiple canonical entities, source contracts, one STTM per entity, assurance, and one publication target per entity. The JSON Schema drives both validation and the local Flask UI.
+## Why CADEO?
 
-**This is a breaking six-stage specification release.** A data product is the unit of ownership; a *model ID* is the unit of transformation, quality testing and publication. There is no second SQL engine, no second database execution engine, and no compatibility mode for the old single-entity YAML shape.
+Data products often scatter their requirements, source assumptions, mapping
+logic and checks across documents and code. That makes changes hard to trace and
+leaves teams unsure what a successful run actually proves. CADEO brings these
+decisions together in a versioned contract, then uses it to validate the design,
+generate implementation assets and connect test results back to requirements.
+
+One product can publish multiple related canonical models. Each model has its own
+source-to-target mapping, checks and publication target, while the product remains
+the unit of ownership. Author the contract as YAML or use the local visual editor;
+both work with the same specification and services.
+
+## How it works
+
+```mermaid
+flowchart TD
+  A["Author a product contract<br/>YAML or local editor"] --> B["Validate<br/>Schema and semantic checks"]
+  B --> C["Normalize product models<br/>and plan dependencies"]
+  C --> D["Compile<br/>SQLGlot translation and SQLFluff validation"]
+  D --> E["Generated assets<br/>SQL, checks, lineage and plans"]
+  E --> F["Build through SQLAlchemy<br/>Run models and quality gates in dependency order"]
+  F --> G["Publish passing models<br/>Record results and acceptance evidence"]
+  F --> H["Failed gate<br/>Block subsequent publication"]
+  C -. Optional .-> I["Discover live sources<br/>Check metadata; optionally profile data"]
+```
+
+Validation and compilation do not require a database. Discovery is optional;
+building requires a configured connection and a supported publication strategy.
+SQL dialect support is separate from database driver availability and safe native
+publication. `cadeo dialects` and `cadeo engines` show the available options.
+
+In short: author, validate, plan, compile, then optionally build and inspect the
+evidence. The diagram renders on platforms that support Mermaid.
+
+### The contract
+
+| Section | Describes | Supports |
+| --- | --- | --- |
+| Definition | Business outcome, features and acceptance criteria | Requirement traceability and acceptance evidence |
+| Model | Entities, grain, attributes, keys and relationships | Canonical models and relationship checks |
+| Sources | Connections, datasets, columns and source contracts | Source validation and optional discovery |
+| Mapping | Source bindings, joins, filters and expressions | Transformation SQL and field-level lineage |
+| Assurance | Quality rules, reconciliation and tests | Quality gates and acceptance results |
+| Delivery | Targets, execution, refresh and recovery | Publication assets and build configuration |
+
+For detailed options, see [the multi-model example](#one-product-multiple-tables),
+[CLI commands](#cli), [generated deliverables](#generated-deliverables), and
+[validation and tests](#validation-and-tests). Repository examples require a
+source checkout; the packaged tutorial does not.
 
 ## Install
 
+CADEO requires Python 3.10 or later. From a checkout or unpacked source
+distribution, install it with pip:
+
 ```bash
-python -m pip install -e .
-cade --version
-# Versioned YAML and its local schema
-cade init product.yaml
-# Open local visual editor
-cade ui examples/multi_model --port 8765
+python -m pip install .
+cadeo --version
 ```
 
-`cade ui test/ --port 8765` creates the workspace directory, including missing
-parents, and installs the bundled schema if absent. Existing schema edits,
-product YAML, databases, and generated outputs are preserved on startup.
-To explicitly restore the bundled schema, use
-`cade ui test/ --port 8765 --overwrite`. This flag replaces only the bundled
-schema file; it does not reset the workspace or overwrite authored products.
+For development, use `python -m pip install -e .` instead. SQLite works without
+an additional database driver; optional drivers can be installed using extras,
+for example `python -m pip install '.[duckdb]'` from the source directory. Use
+`cadeo engines` to check driver availability and publication support. This source
+installation does not assume that this version has been published to PyPI.
 
-Open `http://127.0.0.1:8765` and select `product.yaml` in the multi-model folder. The editor provides a model selector in **Model**, **Map**, **Prove** and **Deliver**, plus Canonical ERD, source-to-target lineage, dependency diagrams, SQL preview, and acceptance evidence. Select **Add model** to create synchronized entries across the canonical, mapping, assurance and target registries. The YAML view edits the same document. The application only listens on localhost.
+Connection environment variables use the `CADEO_*` prefix. Schema and artifact
+format identifiers use `cadeo`; contracts and evidence must use these identifiers.
 
 ## First run: local tutorial
 
 Start with the local connection-support tutorial. It creates isolated SQLite
 sample data and guides you from a valid specification through compiled SQL to
-a passing data run. No external database or credentials are needed.
+a passing data run. No external database, credentials, or repository examples
+are needed.
 
 ```bash
-cade tutorial init
+cadeo tutorial init
 # Run the export command printed by init to select the local SQLite database.
-cade validate tutorial/starter/product.yaml
-cade compile tutorial/starter/product.yaml --out tutorial/build --dialect sqlite
-cade build tutorial/starter/product.yaml --out tutorial/build
-cade tutorial guide
-cade ui .
+cadeo validate tutorial/starter/product.yaml
+cadeo compile tutorial/starter/product.yaml --out tutorial/build --dialect sqlite
+cadeo build tutorial/starter/product.yaml --out tutorial/build
+cadeo tutorial guide
+cadeo ui .
 ```
+
+Open `http://127.0.0.1:8765` to use the local editor. To start a new contract
+instead, run `cadeo init product.yaml` to create a YAML specification and its
+adjacent schema.
+
+## Explore the editor
+
+`cadeo ui test/ --port 8765` creates the workspace directory, including missing
+parents, and installs the bundled schema if absent. Existing schema edits,
+product YAML, databases, and generated outputs are preserved on startup.
+To explicitly restore the bundled schema, use
+`cadeo ui test/ --port 8765 --overwrite`. This flag replaces only the bundled
+schema file; it does not reset the workspace or overwrite authored products.
+
+The editor provides a model selector in **Model**, **Map**, **Prove** and
+**Deliver**, plus Canonical ERD, source-to-target lineage, dependency diagrams,
+SQL preview and acceptance evidence. Select **Add model** to create synchronized
+entries across the canonical, mapping, assurance and target registries. The YAML
+view edits the same document. The application only listens on localhost.
 
 Tutorial setup can be repeated safely. The CLI and **Create local example**
 button complete missing files and source tables without replacing existing
 contracts, notes or database rows. Tutorial actions become available only when
 the required files and source tables are present.
 
+## What success means
+
 These are three distinct proof states:
 
 | State | Proves | Does not prove |
 | --- | --- | --- |
-| **Specification valid** (`cade validate`) | The contract passes schema and semantic validation. | The business rules match the owner's intent or any source data. |
-| **SQL compiled** (`cade compile`) | CADE generated SQL for the selected dialect and validated its syntax. | The SQL has run, the data passes checks, or publication works. |
-| **Data run passed** (tutorial's local SQLite `cade build`) | Generated SQL ran against the local sample data, configured checks passed, and the run's publication steps completed. | The sample represents production, business meaning is approved, or a production release is safe. |
+| **Specification valid** (`cadeo validate`) | The contract passes schema and semantic validation. | The business rules match the owner's intent or any source data. |
+| **SQL compiled** (`cadeo compile`) | CADEO generated SQL for the selected dialect and validated its syntax. | The SQL has run, the data passes checks, or publication works. |
+| **Data run passed** (tutorial's local SQLite `cadeo build`) | Generated SQL ran against the local sample data, configured checks passed, and the run's publication steps completed. | The sample represents production, business meaning is approved, or a production release is safe. |
 
 In the editor, select **Tutorial**, then **Open starter**. Use **Validate**,
 **Preview SQL**, and **Build & publish** to reach the same states in order. The
 six tutorial steps continue with owner review, source contracts, mappings,
 checks, publication, and the support queue. The CLI and UI use the same
-contracts and execution services. The [full guide](src/cade/templates/tutorial.md)
+contracts and execution services. The [full guide](src/cadeo/templates/tutorial.md)
 includes all commands, wrong-mapping exercises and their business effects,
 owner-review questions, expected results, and instructions for other database
 connections. Use current-file scope. The starter, full product, and wrong
 mappings are separate exercises, not one project to build together.
 
-A local CADE data run using the connection configured in YAML (e.g. SQLite) is highly
+A local CADEO data run using the connection configured in YAML (e.g. SQLite) is highly
 recommended, not a release requirement. If you skip it,
-`cade evidence tutorial/starter/product.yaml` reports that no data-run evidence
+`cadeo evidence tutorial/starter/product.yaml` reports that no data-run evidence
 was supplied; ensure a data run is completed in development before releasing.
 Validation and compilation do not connect to a database. SQLite is the
-tutorial's bundled sample only: CLI `cade build` and editor **Build & publish**
+tutorial's bundled sample only: CLI `cadeo build` and editor **Build & publish**
 use the execution connection selected in `delivery.execution.connection`,
 resolved through `sources.connections.<id>.url_env`. Set that environment
-variable before running CADE. The editor's **Verification database** path is
+variable before running CADEO. The editor's **Verification database** path is
 for its separate SQLite verification action, not a build-connection override.
 
 ## One product, multiple tables
@@ -163,23 +232,23 @@ Business criteria refer to quality checks as **`model_id/check_id`** (e.g. `merc
 
 ```bash
 # Validate all models and check references
-cade validate examples/multi_model/product.yaml
+cadeo validate examples/multi_model/product.yaml
 # See model-specific IDs
-cade checks examples/multi_model/product.yaml
+cadeo checks examples/multi_model/product.yaml
 # One combined DAG, including intra-product dependencies
-cade plan examples/multi_model/product.yaml
+cadeo plan examples/multi_model/product.yaml
 # Compile every model, checks, audit and publication assets
-cade compile examples/multi_model/product.yaml --out ./build --dialect sqlite
+cadeo compile examples/multi_model/product.yaml --out ./build --dialect sqlite
 # Native SQLAlchemy execution, with a configured connection in YAML
-cade build examples/multi_model/product.yaml --out ./build
+cadeo build examples/multi_model/product.yaml --out ./build
 # Target an individual model (and all upstream models)
-cade build examples/multi_model/ --target merchant_operations.devices
+cadeo build examples/multi_model/ --target merchant_operations.devices
 # Human-readable traceability and evidence
-cade trace examples/multi_model/product.yaml
-cade evidence examples/multi_model/product.yaml
+cadeo trace examples/multi_model/product.yaml
+cadeo evidence examples/multi_model/product.yaml
 ```
 
-For native builds, configure an SQLAlchemy connection URL in the environment referenced by `sources.connections` and `delivery.execution`. `cade compile` produces assets without requiring a database connection. `cade build` executes the model DAG using **SQLAlchemy**, after compilation through **SQLGlot** and dialect validation through **SQLFluff**. Source readiness, preservation, staging, reconciliation, quality checks and publication follow the plan. A failed check prevents subsequent publication, and the run manifest stores check results and step statuses. Transaction-safe publication remains restricted to certified engines; an installed DBAPI driver does not imply safe deployment. `cade engines` reports actual driver availability.
+For native builds, configure an SQLAlchemy connection URL in the environment referenced by `sources.connections` and `delivery.execution`. `cadeo compile` produces assets without requiring a database connection. `cadeo build` executes the model DAG using **SQLAlchemy**, after compilation through **SQLGlot** and dialect validation through **SQLFluff**. Source readiness, preservation, staging, reconciliation, quality checks and publication follow the plan. A failed check prevents subsequent publication, and the run manifest stores check results and step statuses. Transaction-safe publication remains restricted to certified engines; an installed DBAPI driver does not imply safe deployment. `cadeo engines` reports actual driver availability.
 
 To verify a real two-model end-to-end build and deliberately failed rerun against disposable SQLite data:
 
@@ -192,7 +261,7 @@ All database operations, including SQLite, are executed through SQLAlchemy. The 
 ## Generated deliverables
 
 The output setting is a **root directory**, not a flat collection of files.
-CADE v0.8.5 creates one folder named after each product's `definition.name`.
+CADEO v0.8.5 creates one folder named after each product's `definition.name`.
 All models belonging to that product stay together, with model-qualified
 filenames such as `merchant_operations.devices.checks.sql`.
 
@@ -275,15 +344,15 @@ For example, a compile-only layout beside your configured `generated` directory:
 delivery:
   output: ./generated
   artifact_paths:
-    sql: ../../target/cade/sql
-    transformations: ../../models/cade
-    quality: ../../target/cade/quality
-    tests: ../../tests/cade
-    plans: ../../target/cade/plans
-    metadata: ../../target/cade/metadata
-    lineage: ../../target/cade/lineage
-    documentation: ../../docs/cade
-    project_plans: ../target/cade/project
+    sql: ../../target/cadeo/sql
+    transformations: ../../models/cadeo
+    quality: ../../target/cadeo/quality
+    tests: ../../tests/cadeo
+    plans: ../../target/cadeo/plans
+    metadata: ../../target/cadeo/metadata
+    lineage: ../../target/cadeo/lineage
+    documentation: ../../docs/cadeo
+    project_plans: ../target/cadeo/project
 ```
 
 `project_plans` uses the **shared project output root** (`--out`, otherwise
@@ -301,7 +370,7 @@ preflights all configured destinations and permits relocation only within its
 workspace. Plans and lineage references follow the actual emitted paths.
 No unused default folders are created. Existing exports are never moved or
 deleted when a setting changes; use the latest returned file list and manifests.
-These controls do **not** convert CADE SQL or packs into dbt-native models or
+These controls do **not** convert CADEO SQL or packs into dbt-native models or
 unit tests. They let a future exporter use another layout without requiring
 the current hard-coded directory tree.
 
@@ -317,7 +386,7 @@ paths** includes each manifest, runner and README. The selection applies only to
 compilation, does not modify YAML and does not enable exports during native builds.
 
 ```bash
-cade compile examples/sqlite_business_tests.yaml --out generated --dialect sqlite --test-pack sql
+cadeo compile examples/sqlite_business_tests.yaml --out generated --dialect sqlite --test-pack sql
 ```
 
 Each model gets `generated/<product>/tests/<product.model>/`, containing one SQL
@@ -327,7 +396,7 @@ your database client: exactly one row and one numeric `failures` column is
 required, with zero meaning pass. A SQL error is a failure, not a skipped test.
 
 The included runner requires only **SQLAlchemy and your database driver**, not
-CADE, YAML, SQLGlot or SQLFluff. Set `DATABASE_URL` in your environment, then run:
+CADEO, YAML, SQLGlot or SQLFluff. Set `DATABASE_URL` in your environment, then run:
 
 ```bash
 python generated/device_business_tests/tests/device_business_tests.device/run.py
@@ -354,23 +423,12 @@ quality-gate SQL and build behavior remain unchanged.
 
 ## Architecture
 
-```
-Versioned YAML + JSON Schema
-   ├── Definition (requirements/features/acceptance)
-   ├── Model: entities[model_id] (grain/attributes/key/relations)
-   ├── Sources: datasets[source_id] (physical, model_ref, product_ref)
-   ├── Mapping: entities[model_id] (STTM/joins/filters/unions)
-   ├── Assurance: entities[model_id] (quality/reconciliation/tests)
-   └── Delivery: targets[model_id] (publication/dialect/execution)
-             ↓
-  Shared specification parser + semantic validator
-             ↓
-  DataProduct (models: canonical build units)
-             ↓
-  One dependency DAG / SQLGlot + SQLFluff / SQLAlchemy executor
-             ↓
-  Independently published related tables + run evidence
-```
+The versioned contract has six sections: **definition** (requirements), **model**
+(canonical entities), **sources** (source contracts), **mapping** (transformations),
+**assurance** (checks) and **delivery** (targets and execution). The shared parser
+and validator produce model build units for one dependency plan, compiler and
+SQLAlchemy executor. A model ID identifies each unit of transformation, testing
+and publication.
 
 The canonical ERD displays all entities within one YAML, and can also resolve relationships across YAML files at project scope. The lineage graph shows model-specific source tables, joins, union branches, transformations and the links from upstream published model outputs. Neither diagram is an independent model or editable source of truth.
 
@@ -379,10 +437,36 @@ The canonical ERD displays all entities within one YAML, and can also resolve re
 ```bash
 python -m pip install -e ".[duckdb]" pytest
 python -m pytest -q
-node --check src/cade/web/editor.js
+node --check src/cadeo/web/editor.js
 ```
 
 The v0.8.5 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
+
+## Packaging and release
+
+The distribution, Python package and CLI are named `cadeo`. After CADEO is published,
+install it with `python -m pip install cadeo`; the source installation above
+works before publication.
+
+With Poetry 2 installed, build the source distribution and wheel using the
+existing setuptools backend, then inspect the artifacts without uploading:
+
+```bash
+poetry build
+poetry publish --dry-run
+```
+
+Test the wheel in a clean environment and run the tutorial. Once the distribution
+name and version are ready, authenticate Poetry with a PyPI API token (see
+[Poetry's credential instructions](https://python-poetry.org/docs/repositories/#configuring-credentials))
+and publish the built artifacts:
+
+```bash
+poetry publish
+```
+
+Publishing is irreversible for a given filename and version. Check the package
+name and artifacts before uploading; subsequent releases need a new version.
 
 ### Notes
 

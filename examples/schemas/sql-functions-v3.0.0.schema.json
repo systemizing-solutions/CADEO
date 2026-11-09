@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cade.org/schemas/product/3.0.0",
-  "title": "CADE: Contract-Driven Automation for Data Engineering: Multi-model specification v0.8.5",
+  "$id": "https://cadeo.org/schemas/product/3.0.0",
+  "title": "CADEO: Contract-driven Automation for Data Engineering & Orchestration: Multi-model specification v0.8.5",
   "description": "One data product containing multiple canonical entities, source-to-target mappings, quality gates and published tables. The six stage registries share stable model IDs.",
   "type": "object",
   "additionalProperties": false,
@@ -165,7 +165,7 @@
                       "items": {
                         "$ref": "#/$defs/checkId"
                       },
-                      "description": "IDs of generated SQL checks that demonstrate this acceptance criterion. The editor selects exact IDs from the compiler check registry; use cade checks to list them in the CLI. Missing links warn."
+                      "description": "IDs of generated SQL checks that demonstrate this acceptance criterion. The editor selects exact IDs from the compiler check registry; use cadeo checks to list them in the CLI. Missing links warn."
                     }
                   },
                   "required": [
@@ -1018,7 +1018,7 @@
         },
         "execution": {
           "type": "object",
-          "description": "Optional database execution configuration. Required for cade build; compile remains offline.",
+          "description": "Optional database execution configuration. Required for cadeo build; compile remains offline.",
           "additionalProperties": false,
           "properties": {
             "connection": {

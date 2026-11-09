@@ -7,8 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase, mock
 
-from cade.models.specification import SpecificationValidationError
-from cade.services.driver_installation_service import DriverInstallationService
+from cadeo.models.specification import SpecificationValidationError
+from cadeo.services.driver_installation_service import DriverInstallationService
 
 
 class FakeCatalog:
@@ -42,7 +42,7 @@ class DriverInstallationTests(TestCase):
         self.fail('Timed out waiting for mock installer')
 
     def test_unknown_package_ids_and_unconfirmed_requests_cannot_invoke_pip(self):
-        with mock.patch('cade.services.driver_installation_service.subprocess.run') as run:
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run') as run:
             for value in ('custom-package', 'postgresql; --index-url https://evil.example',
                           '../data.txt', '', 1, None):
                 with self.assertRaises(SpecificationValidationError):
@@ -65,7 +65,7 @@ class DriverInstallationTests(TestCase):
             self.catalog.driver_loaded = True
             return subprocess.CompletedProcess(arguments, 0)
 
-        with mock.patch('cade.services.driver_installation_service.subprocess.run', side_effect=pip_run) as run:
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run', side_effect=pip_run) as run:
             result = self.service.start('postgresql', confirmed=True)
             self.assertEqual(result['status'], 'installing')
             final = self.await_job()
@@ -73,12 +73,12 @@ class DriverInstallationTests(TestCase):
             self.assertTrue(final['driver_loaded'])
             self.assertEqual(final['id'], result['id'])
             run.assert_called_once()
-        with mock.patch('cade.services.driver_installation_service.subprocess.run') as run:
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run') as run:
             self.assertEqual(self.service.start('postgresql', confirmed=True)['status'], 'already_installed')
             run.assert_not_called()
 
     def test_pip_failure_reports_safe_error_without_driver_success(self):
-        with mock.patch('cade.services.driver_installation_service.subprocess.run',
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run',
                         return_value=subprocess.CompletedProcess([], 2)):
             self.service.start('postgresql', confirmed=True)
             job = self.await_job()
@@ -88,7 +88,7 @@ class DriverInstallationTests(TestCase):
         self.assertNotIn('postgresql://', str(job))
 
     def test_pip_success_without_loadable_dbapi_is_not_success(self):
-        with mock.patch('cade.services.driver_installation_service.subprocess.run',
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run',
                         return_value=subprocess.CompletedProcess([], 0)):
             self.service.start('postgresql', confirmed=True)
             job = self.await_job()
@@ -103,7 +103,7 @@ class DriverInstallationTests(TestCase):
             gate.wait(2)
             raise subprocess.TimeoutExpired(args[0], 300, output='secret-url')
 
-        with mock.patch('cade.services.driver_installation_service.subprocess.run', side_effect=slow_run):
+        with mock.patch('cadeo.services.driver_installation_service.subprocess.run', side_effect=slow_run):
             self.service.start('postgresql', confirmed=True)
             with self.assertRaisesRegex(SpecificationValidationError, 'already running'):
                 self.service.start('postgresql', confirmed=True)
@@ -113,7 +113,7 @@ class DriverInstallationTests(TestCase):
         self.assertNotIn('secret-url', str(job))
 
     def test_catalogue_includes_all_install_choices_not_freeform_packages(self):
-        from cade.services.engine_catalog_service import EngineCatalogService
+        from cadeo.services.engine_catalog_service import EngineCatalogService
         choices = EngineCatalogService.catalog()
         self.assertEqual(52, len(choices))
         self.assertEqual(len(choices), len({row['id'] for row in choices}))
@@ -130,7 +130,7 @@ class FlaskDriverInstallationTests(TestCase):
             raise __import__('unittest').SkipTest('Flask not installed')
 
     def setUp(self):
-        from cade.exposers.web import create_app
+        from cadeo.exposers.web import create_app
         self.folder = TemporaryDirectory()
         self.client = create_app(Path(self.folder.name)).test_client()
         self.headers = {'X-Editor-Token': self.client.get('/api/bootstrap').json['token']}

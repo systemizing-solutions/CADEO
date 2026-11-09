@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cade"
+name = "cadeo"
 version = "0.8.5"
-description = "Contract-driven, schema-validated data product specifications with automated SQL compilation to standardize and simplify data engineering."
+description = "CADEO (Contract-driven Automation for Data Engineering & Orchestration) is a Contract-driven, schema-validated data product specifications with automated SQL compilation to standardize and simplify data engineering."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -72,10 +72,10 @@ ydb = ["ydb-sqlalchemy"]
 yugabyte = ["sqlalchemy-yugabytedb"]
 
 [project.scripts]
-cade = "cade.exposers.cli:main"
+cadeo = "cadeo.exposers.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-cade = ["templates/*.yaml", "templates/*.md", "templates/*.py", "schemas/*.json", "web/*.html", "web/*.js", "web/*.css"]
+cadeo = ["templates/*.yaml", "templates/*.md", "templates/*.py", "schemas/*.json", "web/*.html", "web/*.js", "web/*.css"]

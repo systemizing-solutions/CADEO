@@ -5,8 +5,8 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase, mock
 
 from sqlalchemy import inspect
-from cade.brokers.execution_broker import ExecutionBroker
-from cade.models.specification import SpecificationValidationError
+from cadeo.brokers.execution_broker import ExecutionBroker
+from cadeo.models.specification import SpecificationValidationError
 from tests.support import sqlalchemy_connection, split_controlled_test_sql
 
 

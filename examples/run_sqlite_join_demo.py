@@ -3,10 +3,10 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from cade.brokers.execution_broker import ExecutionBroker
-from cade.brokers.file_broker import FileBroker
-from cade.services.product_service import ProductService
-from cade.services.specification_service import SpecificationService
+from cadeo.brokers.execution_broker import ExecutionBroker
+from cadeo.brokers.file_broker import FileBroker
+from cadeo.services.product_service import ProductService
+from cadeo.services.specification_service import SpecificationService
 
 
 

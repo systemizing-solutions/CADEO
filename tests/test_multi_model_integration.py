@@ -6,17 +6,17 @@ def test_pinned_previous_schema_does_not_use_bundled_version(tmp_path):
     import copy
     import json
     import yaml
-    from cade.brokers.file_broker import FileBroker
-    from cade.exposers.web import create_app
-    from cade.models.specification import SpecificationValidationError
-    from cade.services.specification_service import SpecificationService
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.web import create_app
+    from cadeo.models.specification import SpecificationValidationError
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     files = FileBroker()
     bundled = json.loads(SpecificationService(files).schema_json())
     old_schema = copy.deepcopy(bundled)
-    old_schema['$id'] = 'https://cade.org/schemas/product/0.8.4'
+    old_schema['$id'] = 'https://cadeo.org/schemas/product/0.8.4'
     old_schema['x-schema-version'] = '0.8.4'
     old_schema['properties']['spec_version']['const'] = '0.8.4'
     old_schema['properties']['delivery']['properties'].pop('artifact_paths', None)
@@ -65,10 +65,10 @@ def test_pinned_previous_schema_does_not_use_bundled_version(tmp_path):
 def test_configurable_artifact_dependency_paths():
     from dataclasses import replace
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.models.specification import ArtifactPaths
-    from cade.services.dependency_service import DependencyService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.models.specification import ArtifactPaths
+    from cadeo.services.dependency_service import DependencyService
+    from cadeo.services.specification_service import SpecificationService
 
     source = Path(__file__).resolve().parents[1] / 'examples/sqlite_devices.yaml'
     spec = SpecificationService(FileBroker()).load(source).models[0]
@@ -83,10 +83,10 @@ def test_configurable_artifact_dependency_paths():
 def test_configurable_artifact_layout_compile_and_preview(tmp_path, external):
     import json
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.exposers.web import create_app
-    from cade.services.product_service import ProductService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.web import create_app
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
     from tests.support import write_document
 
     files = FileBroker()
@@ -138,15 +138,15 @@ def test_configurable_artifact_layout_compile_and_preview(tmp_path, external):
 
 @pytest.mark.parametrize('value', ['/tmp/escaped', 'C:/escaped', '\\server\\share', 'bad\\path', '', ' ', 'bad\npath'])
 def test_artifact_layout_rejects_invalid_paths(value):
-    from cade.models.specification import ArtifactPaths, SpecificationValidationError
+    from cadeo.models.specification import ArtifactPaths, SpecificationValidationError
 
     with pytest.raises(SpecificationValidationError, match='artifact_paths'):
         ArtifactPaths(tests=value)
 
 
 def test_artifact_layout_blocks_editor_escape_before_writes(tmp_path):
-    from cade.exposers.web import create_app
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     document = TutorialService().document(starter=True)
@@ -163,12 +163,12 @@ def test_artifact_layout_blocks_editor_escape_before_writes(tmp_path):
 def test_configurable_artifact_layout_native_build(tmp_path, monkeypatch):
     import json
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.build_workflow_service import BuildWorkflowService
-    from cade.services.product_service import ProductService
-    from cade.services.project_service import ProjectService
-    from cade.services.specification_service import SpecificationService
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.build_workflow_service import BuildWorkflowService
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.project_service import ProjectService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     tutorial = TutorialService()
@@ -198,10 +198,10 @@ def test_configurable_artifact_layout_native_build(tmp_path, monkeypatch):
 def test_artifact_layout_project_plan_agreement(tmp_path):
     from dataclasses import replace
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.models.specification import ArtifactPaths, SpecificationValidationError
-    from cade.services.project_service import Project, ProjectService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.models.specification import ArtifactPaths, SpecificationValidationError
+    from cadeo.services.project_service import Project, ProjectService
+    from cadeo.services.specification_service import SpecificationService
 
     spec = SpecificationService(FileBroker()).load(
         Path(__file__).resolve().parents[1] / 'examples/sqlite_devices.yaml').models[0]
@@ -217,7 +217,7 @@ def test_artifact_layout_project_plan_agreement(tmp_path):
 @pytest.mark.parametrize('partial_database', [False, True])
 def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database):
     import json
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import sqlalchemy_connection
 
     service = TutorialService()
@@ -257,8 +257,8 @@ def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database)
 
 
 def test_tutorial_init_endpoint_recovers_partial_example(tmp_path):
-    from cade.exposers.web import create_app
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
 
     root = tmp_path / 'tutorial'
     (root / 'starter').mkdir(parents=True)
@@ -280,7 +280,7 @@ def test_tutorial_init_endpoint_recovers_partial_example(tmp_path):
 
 @pytest.mark.parametrize('document', [None, [], {'schema': {'path': 'missing.schema.json', 'version': '0.8.0'}}])
 def test_check_registry_rejection_logs_reason(tmp_path, caplog, document):
-    from cade.exposers.web import create_app
+    from cadeo.exposers.web import create_app
 
     client = create_app(tmp_path).test_client()
     token = client.get('/api/bootstrap').get_json()['token']
@@ -297,11 +297,11 @@ def test_check_registry_rejection_logs_reason(tmp_path, caplog, document):
 def test_standalone_sql_test_pack_export(tmp_path, directory):
     import json
     from pathlib import Path
-    from cade.exposers.cli import main
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.product_service import ProductService
-    from cade.services.specification_service import SpecificationService
-    from cade.services.sql_service import SqlTemplateService
+    from cadeo.exposers.cli import main
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.sql_service import SqlTemplateService
     from tests.support import write_document
 
     files = FileBroker()
@@ -345,9 +345,9 @@ def test_standalone_sql_test_pack_runner(tmp_path, malformed_sql):
     import subprocess
     import sys
     from sqlalchemy import create_engine
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.product_service import ProductService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
 
     files = FileBroker()
     service = ProductService(files, SpecificationService(files))
@@ -397,11 +397,11 @@ def test_standalone_sql_test_pack_dialects(tmp_path, dialect):
     import json
     from pathlib import Path
     from sqlglot import exp, parse
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.product_service import ProductService
-    from cade.services.specification_service import SpecificationService
-    from cade.services.dialect_service import DialectService
-    from cade.services.test_pack_service import TestPackService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.dialect_service import DialectService
+    from cadeo.services.test_pack_service import TestPackService
 
     files = FileBroker()
     service = ProductService(files, SpecificationService(files))
@@ -422,10 +422,10 @@ def test_standalone_sql_test_pack_dialects(tmp_path, dialect):
 def test_standalone_sql_test_pack_cross_product(tmp_path):
     import json
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.product_service import ProductService
-    from cade.services.project_service import ProjectService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.project_service import ProjectService
+    from cadeo.services.specification_service import SpecificationService
 
     files = FileBroker()
     specifications = SpecificationService(files)
@@ -444,9 +444,9 @@ def test_standalone_sql_test_pack_multi_model(tmp_path):
     import copy
     import json
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.product_service import ProductService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
     from tests.support import write_document
 
     files = FileBroker()
@@ -469,8 +469,8 @@ def test_standalone_sql_test_pack_multi_model(tmp_path):
 def test_ui_creates_missing_workspace(tmp_path, monkeypatch):
     from unittest.mock import Mock
     from flask import Flask
-    from cade.exposers.cli import main
-    from cade.services.schema_catalog_service import SchemaCatalogService
+    from cadeo.exposers.cli import main
+    from cadeo.services.schema_catalog_service import SchemaCatalogService
 
     run = Mock()
     monkeypatch.setattr(Flask, 'run', run)
@@ -487,10 +487,10 @@ def test_ui_preserves_files_unless_schema_overwrite_requested(tmp_path, monkeypa
     import json
     from unittest.mock import Mock
     from flask import Flask
-    from cade.brokers.file_broker import FileBroker
-    from cade.exposers.cli import main
-    from cade.exposers.web import create_app
-    from cade.services.schema_catalog_service import SchemaCatalogService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.cli import main
+    from cadeo.exposers.web import create_app
+    from cadeo.services.schema_catalog_service import SchemaCatalogService
 
     create_app(tmp_path)
     schema_path = tmp_path / SchemaCatalogService.DEFAULT
@@ -520,9 +520,9 @@ def test_ui_invalid_schema_requires_explicit_overwrite(tmp_path, monkeypatch, ov
     import json
     from unittest.mock import Mock
     from flask import Flask
-    from cade.exposers.cli import main
-    from cade.exposers.web import create_app
-    from cade.services.schema_catalog_service import SchemaCatalogService
+    from cadeo.exposers.cli import main
+    from cadeo.exposers.web import create_app
+    from cadeo.services.schema_catalog_service import SchemaCatalogService
 
     create_app(tmp_path)
     schema_path = tmp_path / SchemaCatalogService.DEFAULT
@@ -542,7 +542,7 @@ def test_ui_invalid_schema_requires_explicit_overwrite(tmp_path, monkeypatch, ov
 
 
 def test_ui_rejects_file_workspace_without_overwriting(tmp_path):
-    from cade.exposers.cli import main
+    from cadeo.exposers.cli import main
 
     path = tmp_path / 'test'
     path.write_text('Keep this file')
@@ -554,13 +554,13 @@ def test_ui_rejects_file_workspace_without_overwriting(tmp_path):
 
 def test_init_and_editor_versions_match_app(tmp_path):
     import json
-    from cade.brokers.file_broker import FileBroker
-    from cade.exposers.cli import VERSION
-    from cade.exposers.web import create_app
-    from cade.models.specification import SpecificationValidationError
-    from cade.services.product_service import ProductService
-    from cade.services.schema_catalog_service import SchemaCatalogService
-    from cade.services.specification_service import SpecificationService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.cli import VERSION
+    from cadeo.exposers.web import create_app
+    from cadeo.models.specification import SpecificationValidationError
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.schema_catalog_service import SchemaCatalogService
+    from cadeo.services.specification_service import SpecificationService
 
     files = FileBroker()
     specifications = SpecificationService(files)
@@ -585,10 +585,10 @@ def test_init_and_editor_versions_match_app(tmp_path):
 def test_generated_product_layout(tmp_path):
     from pathlib import Path
     from unittest.mock import Mock
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.specification_service import SpecificationService
-    from cade.services.product_service import ProductService
-    from cade.services.dependency_service import DependencyService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.dependency_service import DependencyService
 
     files = FileBroker()
     service = ProductService(files, SpecificationService(files))
@@ -609,7 +609,7 @@ def test_generated_product_layout(tmp_path):
     assert {path.relative_to(destination).parts[0] for path in artifacts} == {
         'sql', 'metadata', 'plans', 'lineage', 'documentation'}
     import json
-    from cade.services.traceability_service import TraceabilityService
+    from cadeo.services.traceability_service import TraceabilityService
     plan_path = destination / 'plans' / f'{spec.product.name}.plan.json'
     for node in json.loads(artifacts[plan_path])['nodes']:
         if node['artifact']:
@@ -624,7 +624,7 @@ def test_generated_product_layout(tmp_path):
 def test_generated_sql_is_formatted_without_changing_statements(dialect):
     sqlglot = pytest.importorskip('sqlglot')
     pytest.importorskip('sqlfluff')
-    from cade.services.sqlglot_service import SqlGlotSqlService
+    from cadeo.services.sqlglot_service import SqlGlotSqlService
     script = (
         '/* Source snapshot */ CREATE TABLE gold.device_stage AS '
         'WITH selected AS (SELECT CAST(s.asset_id AS STRING) AS device_id, '
@@ -650,9 +650,9 @@ def test_real_sqlglot_sqlfluff_sqlalchemy_two_model_build():
 def test_real_sqlfluff_multitable_generation(tmp_path):
     pytest.importorskip('sqlglot')
     pytest.importorskip('sqlfluff')
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.specification_service import SpecificationService
-    from cade.services.product_service import ProductService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.product_service import ProductService
     from pathlib import Path
     files=FileBroker()
     service=ProductService(files,SpecificationService(files))
@@ -666,11 +666,11 @@ def test_real_sqlfluff_multitable_generation(tmp_path):
 def test_generated_multi_model_and_project_layout(tmp_path):
     import json
     from pathlib import Path
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.specification_service import SpecificationService
-    from cade.services.product_service import ProductService
-    from cade.services.project_service import ProjectService
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.project_service import ProjectService
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     files = FileBroker()
@@ -703,11 +703,33 @@ def test_generated_multi_model_and_project_layout(tmp_path):
         assert (destination / 'runs/layout-test/sql/transformations' / f'{name}.sql').is_file()
 
 
+def test_tutorial_erd_shows_declared_connection_relationships(tmp_path):
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.tutorial_service import TutorialService
+    from cadeo.services.visual_graph_service import VisualGraphService
+    from tests.support import write_document
+
+    files = FileBroker()
+    path = tmp_path / 'product.yaml'
+    write_document(path, TutorialService().document())
+    products = ProductService(files, SpecificationService(files))
+    bundle = products.validate(path)
+    graph = VisualGraphService.erd(bundle.models)
+
+    assert [(link['attribute'], link['related_attribute'], link['cardinality'], link['status'])
+            for link in graph['relationships']] == [
+        ('merchant_id', 'merchant_id', 'many_to_one', 'resolved'),
+        ('service_id', 'service_id', 'many_to_one', 'resolved'),
+    ]
+
+
 @pytest.mark.parametrize('test_pack', [None, 'none', 'sql'])
 @pytest.mark.parametrize('directory', [False, True])
 def test_generated_layout_flask_compile_preview(tmp_path, test_pack, directory):
-    from cade.exposers.web import create_app
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     document = TutorialService().document()
@@ -753,8 +775,8 @@ def test_generated_layout_flask_compile_preview(tmp_path, test_pack, directory):
 
 @pytest.mark.parametrize('test_pack', ['dbt', '', [], {}])
 def test_flask_rejects_unknown_test_pack(tmp_path, test_pack):
-    from cade.exposers.web import create_app
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
     from tests.support import write_document
 
     write_document(tmp_path / 'product.yaml', TutorialService().document())
@@ -771,10 +793,10 @@ def test_flask_rejects_unknown_test_pack(tmp_path, test_pack):
 def test_flask_draft_check_registry_matches_compiler(tmp_path):
     pytest.importorskip('flask')
     pytest.importorskip('sqlglot')
-    from cade.exposers.web import create_app
-    from cade.brokers.file_broker import FileBroker
-    from cade.services.specification_service import SpecificationService
-    from cade.services.sql_service import SqlTemplateService
+    from cadeo.exposers.web import create_app
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.sql_service import SqlTemplateService
     from pathlib import Path
     from shutil import copy2
     import yaml
@@ -785,7 +807,7 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     client=app.test_client()
     doc=yaml.safe_load((tmp_path/'product.yaml').read_text())
     # Use the production YAML 1.2-style loader so 'on' remains a string.
-    from cade.services.specification_service import UniqueKeysLoader
+    from cadeo.services.specification_service import UniqueKeysLoader
     doc=yaml.load((tmp_path/'product.yaml').read_text(), Loader=UniqueKeysLoader)
     response=client.get('/api/bootstrap')
     if response.status_code!=200: pytest.skip('Flask editor bootstrap requires browser token setup')
@@ -801,17 +823,17 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
 
 
 def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, capsys):
-    from cade.exposers.cli import main
-    from cade.services.tutorial_service import TutorialService
-    from cade.services.specification_service import SpecificationService
-    from cade.services.sql_service import SqlTemplateService
-    from cade.brokers.file_broker import FileBroker
+    from cadeo.exposers.cli import main
+    from cadeo.services.tutorial_service import TutorialService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.sql_service import SqlTemplateService
+    from cadeo.brokers.file_broker import FileBroker
     import json
     import yaml
     monkeypatch.setenv(TutorialService.ENV, '')
     root = tmp_path / 'tutorial'
     assert main(['tutorial', 'init', str(root)]) == 0
-    assert 'export CADE_TUTORIAL_DATABASE_URL=' in capsys.readouterr().out
+    assert 'export CADEO_TUTORIAL_DATABASE_URL=' in capsys.readouterr().out
     original = (root / 'product/product.yaml').read_bytes()
     assert main(['tutorial', 'init', str(root)]) == 0
     assert (root / 'product/product.yaml').read_bytes() == original
@@ -844,8 +866,8 @@ def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, cap
 
 
 def test_tutorial_ui_shared_workflow_and_local_guards(tmp_path, monkeypatch):
-    from cade.exposers.web import create_app
-    from cade.services.tutorial_service import TutorialService
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
     import json
     monkeypatch.setenv(TutorialService.ENV, '')
     client = create_app(tmp_path).test_client()

@@ -8,7 +8,7 @@ import json
 import os
 from sqlalchemy import create_engine
 
-from cade.exposers.cli import main
+from cadeo.exposers.cli import main
 
 HERE = Path(__file__).resolve().parent
 

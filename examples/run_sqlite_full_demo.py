@@ -3,10 +3,10 @@ from pathlib import Path
 import argparse
 from tempfile import TemporaryDirectory
 
-from cade.brokers.execution_broker import ExecutionBroker
-from cade.brokers.file_broker import FileBroker
-from cade.services.product_service import ProductService
-from cade.services.specification_service import SpecificationService
+from cadeo.brokers.execution_broker import ExecutionBroker
+from cadeo.brokers.file_broker import FileBroker
+from cadeo.services.product_service import ProductService
+from cadeo.services.specification_service import SpecificationService
 
 
 
@@ -83,6 +83,6 @@ def _execute_demo(db, output, products):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run compiled v0.8.5 demo in SQLite')
-    parser.add_argument('--database', type=Path, help='Create a persistent database for cade verify')
+    parser.add_argument('--database', type=Path, help='Create a persistent database for cadeo verify')
     args = parser.parse_args()
     run(args.database)

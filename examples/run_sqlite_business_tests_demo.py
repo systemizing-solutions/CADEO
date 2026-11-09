@@ -3,7 +3,7 @@
 Uses the real CLI, SQLGlot, SQLFluff and SQLAlchemy. A failed business
 assertion must not replace the previously published SQLite view.
 """
-from cade.brokers.execution_broker import ExecutionBroker
+from cadeo.brokers.execution_broker import ExecutionBroker
 
 import os
 from pathlib import Path
@@ -42,7 +42,7 @@ def main():
                 INSERT INTO input_merchants VALUES ('m1', 'Merchant One');
             ''')
         env = {**os.environ, 'DPC_EXECUTION_DATABASE_URL': f'sqlite:///{database}'}
-        command = [sys.executable, '-m', 'cade', 'build', str(SPEC),
+        command = [sys.executable, '-m', 'cadeo', 'build', str(SPEC),
                    '--dialect', 'sqlite', '--out', str(destination)]
         first = subprocess.run(command, env=env, capture_output=True, text=True)
         assert first.returncode == 0, f'Valid build failed:\n{first.stdout}\n{first.stderr}'

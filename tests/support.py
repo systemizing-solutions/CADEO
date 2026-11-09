@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 
-from cade.brokers.execution_broker import ExecutionBroker
+from cadeo.brokers.execution_broker import ExecutionBroker
 
 
 @contextmanager
@@ -32,7 +32,7 @@ def write_document(path: Path, document: dict) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     reference = path.with_suffix('.schema-v0.8.5.json')
-    template = Path(__file__).resolve().parents[1] / 'src/cade/schemas/product.schema.json'
+    template = Path(__file__).resolve().parents[1] / 'src/cadeo/schemas/product.schema.json'
     reference.write_text(template.read_text())
     new_document = copy.deepcopy(document)
     new_document['schema'] = {'path': reference.name, 'version': '0.8.5'}

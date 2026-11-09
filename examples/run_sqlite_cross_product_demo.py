@@ -8,8 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import os
 
-from cade.brokers.execution_broker import ExecutionBroker
-from cade.exposers.cli import main
+from cadeo.brokers.execution_broker import ExecutionBroker
+from cadeo.exposers.cli import main
 
 HERE = Path(__file__).resolve().parent
 

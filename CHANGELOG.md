@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.6 - Guided first local run & package rename to CADEO (2026-11-09)
+
+- Use `cadeo` for the distribution, Python package, CLI, schema identifiers and serialized artifact formats. Connection environment variables use the `CADEO_*` prefix.
+- Mark the minimum path for a first local run in the six-stage editor: required fields, required list entries and complete field mappings. Link directly to the ready-to-run tutorial starter and clarify that database setup is only needed for Build & publish.
+- Keep non-required schema settings behind a collapsed **Optional and advanced settings** group while leaving required fields and their validation behavior unchanged.
+- Add a concise glossary for canonical model, record grain and reconciliation, including who to ask for business meaning, source keys and acceptable row exceptions. The YAML contract is unchanged.
+- Declare the tutorial Connection-to-Merchant and Connection-to-Service conceptual relationships so the canonical ERD demonstrates links separately from the physical SQL joins.
+- Make the ERD, lineage and dependency diagrams draggable with keyboard movement and workspace/product/scope-specific saved layouts. Add full-screen controls to every graph and replace diagram type and scope dropdowns with tabs.
+
 ## 0.8.5 - Configurable artifact directories (2026-11-08)
 
 - Honor the pinned schema's specification-version constraint during shared core validation instead of imposing the bundled app version. Compatible v0.8.4 schemas remain usable in CLI and editor workflows; mismatched pins, unsupported fields and structure still fail validation.

@@ -51,7 +51,7 @@ model:
 sources:
   connections:
     warehouse:
-      url_env: CADE_DEMO_DATABASE_URL
+      url_env: CADEO_DEMO_DATABASE_URL
   datasets:
     s:
       table: input_devices

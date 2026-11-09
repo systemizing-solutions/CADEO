@@ -13,25 +13,25 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from cade.brokers.file_broker import FileBroker
-from cade.models.specification import DataProduct, SpecificationValidationError
-from cade.services.dependency_service import DependencyService
-from cade.services.dialect_service import DialectService
-from cade.services.evidence_service import EvidenceService
-from cade.services.product_service import ProductService
-from cade.services.project_service import ProjectService
-from cade.services.schema_catalog_service import SchemaCatalogService
-from cade.services.specification_layout_service import ordered_document
-from cade.services.specification_service import SpecificationService, UniqueKeysLoader
-from cade.services.sql_service import SqlTemplateService
-from cade.services.traceability_service import TraceabilityService
-from cade.services.visual_graph_service import VisualGraphService
-from cade.services.verification_service import VerificationService
+from cadeo.brokers.file_broker import FileBroker
+from cadeo.models.specification import DataProduct, SpecificationValidationError
+from cadeo.services.dependency_service import DependencyService
+from cadeo.services.dialect_service import DialectService
+from cadeo.services.evidence_service import EvidenceService
+from cadeo.services.product_service import ProductService
+from cadeo.services.project_service import ProjectService
+from cadeo.services.schema_catalog_service import SchemaCatalogService
+from cadeo.services.specification_layout_service import ordered_document
+from cadeo.services.specification_service import SpecificationService, UniqueKeysLoader
+from cadeo.services.sql_service import SqlTemplateService
+from cadeo.services.traceability_service import TraceabilityService
+from cadeo.services.visual_graph_service import VisualGraphService
+from cadeo.services.verification_service import VerificationService
 from tests.support import write_document
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / 'examples' / 'multi_model' / 'product.yaml'
-SCHEMA = ROOT / 'src' / 'cade' / 'schemas' / 'product.schema.json'
+SCHEMA = ROOT / 'src' / 'cadeo' / 'schemas' / 'product.schema.json'
 
 @pytest.fixture(autouse=True)
 def dialect_without_optional_transpiler():
@@ -53,7 +53,7 @@ def doc():
 
 def test_public_contract_version():
     schema=json.loads(SCHEMA.read_text())
-    from cade.exposers.cli import VERSION
+    from cadeo.exposers.cli import VERSION
     assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.8.5'
     assert SchemaCatalogService.DEFAULT == f'schemas/product-v{VERSION}.schema.json'
     assert tuple(schema['properties']) == ('schema','spec_version','definition','model','sources','mapping','assurance','delivery')
@@ -357,7 +357,7 @@ def test_all_specs_use_new_version():
 
 
 def test_no_old_renderer_in_package():
-    base=ROOT/'src'/'cade'
+    base=ROOT/'src'/'cadeo'
     assert not list(base.rglob('sqlite_broker.py'))
     for path in list(base.rglob('*.py')):
         assert not re.search(r'^\s*import sqlite3\b|^\s*from sqlite3\b',path.read_text(),re.M)
@@ -399,8 +399,8 @@ def test_dangling_cross_product_ref_rejected(tmp_path,services,doc):
 
 
 def test_web_frontend_contains_model_scope():
-    js=(ROOT/'src/cade/web/editor.js').read_text()
-    html=(ROOT/'src/cade/web/index.html').read_text()
+    js=(ROOT/'src/cadeo/web/editor.js').read_text()
+    html=(ROOT/'src/cadeo/web/index.html').read_text()
     assert 'modelSelector' in html
     assert 'model_ref' in js
     assert 'mappingOverview' in js
@@ -428,7 +428,7 @@ def test_existing_sql_generator_gets_per_model_build_units(services):
 
 
 def test_file_target_build_planning_accepts_single_model(services):
-    from cade.services.project_service import Project
+    from cadeo.services.project_service import Project
     product=services[0].load(EXAMPLE)
     project=Project(EXAMPLE.parent, tuple((m.product.name, EXAMPLE, m) for m in product.models))
     assert services[2].plan(project,('devices',)).products==(

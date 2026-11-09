@@ -8,10 +8,10 @@ from unittest import TestCase, mock
 
 from sqlalchemy import inspect
 
-from cade.brokers.execution_broker import ExecutionBroker
-from cade.exposers.cli import main
-from cade.models.specification import SpecificationValidationError
-from cade.services.engine_catalog_service import EngineCatalogService
+from cadeo.brokers.execution_broker import ExecutionBroker
+from cadeo.exposers.cli import main
+from cadeo.models.specification import SpecificationValidationError
+from cadeo.services.engine_catalog_service import EngineCatalogService
 from tests.support import sqlalchemy_connection
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +44,7 @@ class EngineCatalogTests(TestCase):
         # Registration could exist while the DBAPI's native dependencies are missing.
         with mock.patch.object(EngineCatalogService, 'entry_points', return_value={
             'snowflakesqlalchemy': ['snowflake']}), mock.patch(
-            'cade.services.engine_catalog_service.metadata.version', return_value='1.0'
+            'cadeo.services.engine_catalog_service.metadata.version', return_value='1.0'
         ), mock.patch.object(EngineCatalogService, '_driver_loads', return_value=(False, 'driver_not_loadable:ImportError')):
             rows = EngineCatalogService().available()
         snowflake = next(x for x in rows if x['id']=='snowflake')
@@ -56,14 +56,14 @@ class EngineCatalogTests(TestCase):
     def test_driver_loaded_does_not_override_safe_publication_policy(self):
         with mock.patch.object(EngineCatalogService, 'entry_points', return_value={
             'snowflakesqlalchemy': ['snowflake']}), mock.patch(
-            'cade.services.engine_catalog_service.metadata.version', return_value='1.0'
+            'cadeo.services.engine_catalog_service.metadata.version', return_value='1.0'
         ), mock.patch.object(EngineCatalogService, '_driver_loads', return_value=(True,'driver_loaded')):
             rows = EngineCatalogService().available(installed_only=True)
         snowflake = next(x for x in rows if x['id']=='snowflake')
         self.assertTrue(snowflake['driver_loaded'])
         self.assertFalse(snowflake['build_ready'])
         self.assertIsNone(snowflake['publication_strategy'])
-        with mock.patch('cade.brokers.execution_broker.create_engine') as engine:
+        with mock.patch('cadeo.brokers.execution_broker.create_engine') as engine:
             with self.assertRaisesRegex(SpecificationValidationError, 'Safe publication'):
                 with ExecutionBroker().transaction('snowflake://user:password@example.invalid/test'):
                     pass

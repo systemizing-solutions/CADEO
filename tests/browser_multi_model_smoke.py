@@ -2,12 +2,12 @@ from playwright.sync_api import sync_playwright
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml, json, hashlib
-from cade.services.specification_service import UniqueKeysLoader
+from cadeo.services.specification_service import UniqueKeysLoader
 
 root=Path(__file__).resolve().parents[1]
-assets=root/'src/cade/web'
+assets=root/'src/cadeo/web'
 spec=root/'examples/multi_model/product.yaml'
-schema=json.loads((root/'src/cade/schemas/product.schema.json').read_text())
+schema=json.loads((root/'src/cadeo/schemas/product.schema.json').read_text())
 yamltext=spec.read_text()
 document=yaml.load(yamltext,Loader=UniqueKeysLoader)
 errors=[]
@@ -60,8 +60,9 @@ with sync_playwright() as p:
       '/api/yaml/diagnostics':{'valid':True,'issues':[]},
       '/api/artifact':{'content':'SELECT 1;\n'}
     }
-    page.evaluate("""(responses) => { window.fetch = async (url, options) => {
+    page.evaluate("""(responses) => { window.checkRegistryCalls=0; window.fetch = async (url, options) => {
       const name = String(url).split('?')[0];
+      if (name === '/api/check-registry') window.checkRegistryCalls++;
       const obj = responses[name] ?? {error:'not implemented: '+name};
       return new Response(JSON.stringify(obj), {status:responses[name]?200:404,headers:{'Content-Type':'application/json'}});
     }; }""",responses)
@@ -92,6 +93,19 @@ with sync_playwright() as p:
     page.locator('#activeModel').wait_for(timeout=10000)
     print('model picker:',page.locator('#activeModel option').all_text_contents())
     assert page.locator('#activeModel option').count()==2
+    assert 'Minimum path:' in page.locator('.first-run-path').inner_text()
+    glossary=page.locator('.term-glossary')
+    assert glossary.count()==1 and glossary.locator('summary').inner_text()=='Business and data terms'
+    assert glossary.locator('dt').all_text_contents()==['Canonical model','Record grain','Reconciliation']
+    assert glossary.evaluate('(node) => !node.open')
+    optional_settings=page.locator('details.optional-settings').first
+    assert page.locator('details.optional-settings').count()>0
+    assert page.locator('details.optional-settings[open]').count()==0
+    optional_settings.locator('summary').click()
+    assert optional_settings.evaluate('(node) => node.open')
+    optional_settings.locator('summary').click()
+    assert optional_settings.evaluate('(node) => !node.open')
+    assert page.locator('.field-label .required').count()>0
     page.locator('#activeModel').select_option('devices')
     page.once('dialog',lambda dialog: dialog.accept('agreements'))
     page.get_by_role('button',name='+ Add model').click()
@@ -102,6 +116,9 @@ with sync_playwright() as p:
     print('registries:',model_state)
     assert all('agreements' in ids for ids in model_state.values())
     assert all(set(ids)==set(model_state['model']) for ids in model_state.values())
+    page.evaluate("""async () => { state.dirty=false; window.checkRegistryCalls=0; await newFile(); }""")
+    page.wait_for_timeout(50)
+    assert page.evaluate('window.checkRegistryCalls')==0
     assert not errors,errors
     print('BROWSER SMOKE PASS')
     browser.close()

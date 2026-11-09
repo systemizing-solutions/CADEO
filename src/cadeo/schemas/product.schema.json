@@ -1,0 +1,1549 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cadeo.org/schemas/product/0.8.5",
+  "title": "CADEO: Contract-driven Automation for Data Engineering & Orchestration: Multi-model specification v0.8.5",
+  "description": "One data product containing multiple canonical entities, source-to-target mappings, quality gates and published tables. The six stage registries share stable model IDs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "object",
+      "description": "Required local, version-pinned JSON Schema contract. path is relative to this YAML file; version must match x-schema-version in the referenced JSON Schema.",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path to a local versioned JSON Schema (.json) file. No URLs or absolute paths.",
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*://).+\\.json$"
+        },
+        "version": {
+          "type": "string",
+          "description": "Immutable schema revision pinned in this product and verified against the schema file x-schema-version.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "path",
+        "version"
+      ],
+      "readOnly": true
+    },
+    "spec_version": {
+      "const": "0.8.5",
+      "type": "string",
+      "description": "One multi-model specification language version."
+    },
+    "definition": {
+      "type": "object",
+      "title": "Define",
+      "description": "Define the one business data product and its requirements, features and acceptance criteria. Check IDs are explicitly scoped as model_id/check_id.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "description": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "team": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "contact": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "team",
+            "contact"
+          ]
+        },
+        "consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/referenceId"
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "access": {
+                "enum": [
+                  "read",
+                  "restricted"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "purpose",
+              "access"
+            ]
+          }
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "requirements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/referenceId"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "id",
+              "statement"
+            ]
+          }
+        },
+        "features": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/referenceId"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "requirement_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/referenceId"
+                },
+                "uniqueItems": true
+              },
+              "acceptance_criteria": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/referenceId"
+                    },
+                    "statement": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "check_ids": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": {
+                        "$ref": "#/$defs/checkId"
+                      },
+                      "description": "IDs of generated SQL checks that demonstrate this acceptance criterion. The editor selects exact IDs from the compiler check registry; use cadeo checks to list them in the CLI. Missing links warn."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "statement"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "description",
+              "requirement_ids",
+              "acceptance_criteria"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "owner",
+        "consumers",
+        "outcome",
+        "requirements",
+        "features"
+      ]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "title": "Model",
+      "description": "Define all canonical entities in this data product. Each stable model ID represents a separately published table.",
+      "properties": {
+        "entities": {
+          "type": "object",
+          "title": "Canonical entities",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "entity_name": {
+                "title": "Canonical entity name",
+                "description": "The business entity represented by the output, independent of source table names. Use a singular business noun such as Device, Merchant, or Agreement. This names the canonical entity; it does not select a source table.",
+                "examples": [
+                  "Device",
+                  "Merchant"
+                ],
+                "$ref": "#/$defs/identifier"
+              },
+              "record_grain": {
+                "title": "Record grain (one row represents)",
+                "description": "Describe exactly what one row in the final canonical dataset represents. State the business identifier and time or source scope when relevant. For example: One row per source system and source device ID. The declared unique key attributes must identify one row at this grain.",
+                "examples": [
+                  "One row per source system and source device ID",
+                  "One row per merchant as of the reporting date"
+                ],
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "unique_key_attributes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/identifier",
+                  "description": "Name of an attribute defined in model.attributes; do not use physical source-column names."
+                },
+                "x-reference": "attribute",
+                "title": "Unique key attributes",
+                "description": "Select one or more canonical attribute names that uniquely identify each output row at the declared record grain. These must exist in model.attributes and have nullable: false. Combined values must be unique; a generated quality check verifies this. This is a logical uniqueness rule, not necessarily a physical database PRIMARY KEY constraint.",
+                "examples": [
+                  [
+                    "source_system",
+                    "source_device_id"
+                  ],
+                  [
+                    "merchant_id"
+                  ]
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {
+                  "$ref": "#/$defs/identifier"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/canonicalAttribute"
+                },
+                "title": "Canonical attributes",
+                "description": "Define each attribute (column) that the published canonical dataset must contain. Use stable business-oriented names; set its logical data type, whether null values are permitted, and business requirement references. Each required attribute must be mapped in mapping.fields.",
+                "examples": [
+                  {
+                    "source_device_id": {
+                      "type": "string",
+                      "nullable": false,
+                      "requirement_ids": [
+                        "REQ_001"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "relationships": {
+                "type": "array",
+                "description": "Declare a conceptual relationship in the canonical model, not a physical source join. The ERD displays these links; use related_attribute to specify the related field. The related entity may be another product in the project or an external business entity.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "attribute": {
+                      "$ref": "#/$defs/identifier",
+                      "description": "Canonical attribute in model.attributes that identifies the related entity (for example merchant_id on Device).",
+                      "title": "Linking canonical attribute"
+                    },
+                    "entity": {
+                      "$ref": "#/$defs/identifier",
+                      "description": "Related canonical entity_name. A relationship may point to a model in this same data product or to an external entity.",
+                      "title": "Related entity name"
+                    },
+                    "cardinality": {
+                      "type": "string",
+                      "enum": [
+                        "one_to_one",
+                        "many_to_one",
+                        "one_to_many"
+                      ],
+                      "description": "Cardinality from this canonical entity to the related entity. many_to_one means many Device records can refer to one Merchant record.",
+                      "title": "Relationship cardinality"
+                    },
+                    "related_attribute": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                      "title": "Related entity attribute (optional)",
+                      "description": "Canonical attribute on the related entity that this relationship points to (for example merchant_id). Required only to show an exact field-to-field ERD connection. Leave empty for a conceptual relationship to an external entity; do not confuse with a physical SQL join.",
+                      "examples": [
+                        "merchant_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "attribute",
+                    "entity",
+                    "cardinality"
+                  ]
+                },
+                "default": [],
+                "title": "Canonical entity relationships (ERD)"
+              }
+            },
+            "required": [
+              "entity_name",
+              "record_grain",
+              "unique_key_attributes",
+              "attributes"
+            ],
+            "title": "Canonical entity",
+            "description": "One canonical entity and published table. Define its grain, logical key, attributes and conceptual relationships. Every model ID has its own mapping, assurance policy and publication target."
+          },
+          "description": "Key each entity by a stable ID. Each entry has its own grain, attributes, unique key and relationships."
+        }
+      },
+      "required": [
+        "entities"
+      ]
+    },
+    "sources": {
+      "type": "object",
+      "title": "Connect",
+      "description": "Declare database connections and physical or upstream-product datasets once, then reference their IDs from mapping.",
+      "additionalProperties": false,
+      "properties": {
+        "connections": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url_env": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "description": "Name of environment variable holding a SQLAlchemy database URL. Never put credentials in the specification."
+              }
+            },
+            "required": [
+              "url_env"
+            ]
+          },
+          "description": "Optional named live database connections. Required when running discover. Each source references its connection by ID; secrets stay in environment variables.",
+          "examples": [
+            {
+              "warehouse": {
+                "url_env": "DPC_WAREHOUSE_URL"
+              }
+            }
+          ]
+        },
+        "datasets": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Reference a published model from this SAME data product. Source table, keys and columns are derived; never duplicate them.",
+                "properties": {
+                  "model_ref": {
+                    "$ref": "#/$defs/identifier"
+                  },
+                  "alias": {
+                    "$ref": "#/$defs/identifier"
+                  }
+                },
+                "required": [
+                  "model_ref"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Reference a published data product by product.name; target table, fields, keys and types come from that product canonical contract. Never repeat its physical schema.",
+                "properties": {
+                  "product_ref": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",
+                    "description": "Reference an upstream product and model as product_name.model_id. The source inherits its table and schema."
+                  },
+                  "alias": {
+                    "$ref": "#/$defs/identifier",
+                    "description": "Optional SQL alias; defaults to the source registry key."
+                  }
+                },
+                "required": [
+                  "product_ref"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Physical source contract; define table, alias, columns, key and producer contract once.",
+                "properties": {
+                  "table": {
+                    "$ref": "#/$defs/qualifiedIdentifier"
+                  },
+                  "alias": {
+                    "$ref": "#/$defs/identifier"
+                  },
+                  "columns": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "propertyNames": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/$defs/attribute"
+                    },
+                    "description": "Column data contract: declared type and nullable flag."
+                  },
+                  "record_key_columns": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/$defs/identifier",
+                      "x-reference": "source_column",
+                      "description": "Select a column defined under this source dataset’s columns."
+                    },
+                    "title": "Source record key columns",
+                    "description": "Select physical source column names that identify an individual source row for profiling and reconciliation. Each name must exist under this dataset's columns and must be non-nullable. These columns are not necessarily the published canonical key: configure that separately using model.unique_key_attributes.",
+                    "examples": [
+                      [
+                        "asset_id"
+                      ]
+                    ]
+                  },
+                  "contract": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "owner": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "\\S",
+                        "description": "Accountable producer/team for this source"
+                      },
+                      "freshness_hours": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Maximum expected elapsed hours between source updates; not an automatically deployed monitor."
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "freshness_hours"
+                    ]
+                  },
+                  "depends_on": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "uniqueItems": true,
+                    "description": "Optional upstream source IDs. These dependencies are validated and placed before this source in the DAG. Do not repeat source definitions."
+                  },
+                  "connection": {
+                    "$ref": "#/$defs/identifier",
+                    "description": "Reference to connections registry for live discovery; must be supplied for every source when connections is configured.",
+                    "examples": [
+                      "warehouse"
+                    ]
+                  }
+                },
+                "required": [
+                  "table",
+                  "alias",
+                  "columns",
+                  "record_key_columns",
+                  "contract"
+                ]
+              }
+            ],
+            "description": "Choose exactly one: physical source contract, a model_ref within this product, or product_ref of another product.model."
+          },
+          "description": "Single source registry. All primary/union branches and joins must reference these IDs."
+        }
+      },
+      "required": [
+        "datasets"
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "title": "Map",
+      "description": "Provide one complete source-to-target mapping for each canonical entity, using the same IDs as model.entities.",
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "title": "Entity source-to-target mapping",
+            "description": "Map one canonical entity to its source columns, joins, transformations, unions and deduplication. Model IDs must match model.entities.",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/identifier",
+                "description": "ID of a registered source in sources; no duplicated table or column declarations.",
+                "x-reference": "source"
+              },
+              "joins": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "left",
+                        "inner"
+                      ]
+                    },
+                    "on": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "left": {
+                            "$ref": "#/$defs/value"
+                          },
+                          "right": {
+                            "$ref": "#/$defs/value"
+                          }
+                        },
+                        "required": [
+                          "left",
+                          "right"
+                        ],
+                        "description": "Two values/expressions to compare with equality. Left sees prior aliases; right only current alias."
+                      }
+                    },
+                    "expect_unique": {
+                      "type": "boolean",
+                      "default": true
+                    },
+                    "source": {
+                      "$ref": "#/$defs/identifier"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "source",
+                    "on"
+                  ],
+                  "description": "Reference a registered source ID; join expression alias names are declared in the source registry."
+                },
+                "default": []
+              },
+              "fields": {
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {
+                  "$ref": "#/$defs/identifier"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/value"
+                },
+                "description": "Every canonical attribute must have exactly one structured expression.",
+                "x-map-to": "attribute"
+              },
+              "filters": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/predicate"
+                },
+                "default": [],
+                "description": "Predicates ANDed in the branch WHERE clause; explicit reconciliation allowance is needed for excluded source rows."
+              },
+              "priority": {
+                "type": "integer",
+                "default": 100
+              },
+              "unions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "joins": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "left",
+                              "inner"
+                            ]
+                          },
+                          "on": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "left": {
+                                  "$ref": "#/$defs/value"
+                                },
+                                "right": {
+                                  "$ref": "#/$defs/value"
+                                }
+                              },
+                              "required": [
+                                "left",
+                                "right"
+                              ],
+                              "description": "Two values/expressions to compare with equality. Left sees prior aliases; right only current alias."
+                            }
+                          },
+                          "expect_unique": {
+                            "type": "boolean",
+                            "default": true
+                          },
+                          "source": {
+                            "$ref": "#/$defs/identifier"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "source",
+                          "on"
+                        ],
+                        "description": "Registered source ID for this join."
+                      },
+                      "default": []
+                    },
+                    "filters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/predicate"
+                      },
+                      "default": [],
+                      "description": "Predicates ANDed in the branch WHERE clause; explicit reconciliation allowance is needed for excluded source rows."
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "default": 100,
+                      "description": "Lower number wins when deduplicating across UNION ALL branches."
+                    },
+                    "fields": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "propertyNames": {
+                        "$ref": "#/$defs/identifier"
+                      },
+                      "additionalProperties": {
+                        "$ref": "#/$defs/value"
+                      },
+                      "description": "Every canonical attribute must have exactly one structured expression."
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "fields"
+                  ]
+                },
+                "description": "Additional independently mapped branches, combined using UNION ALL; selected rows remain traceable to their primary source."
+              },
+              "deduplicate": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "by": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "#/$defs/identifier"
+                    }
+                  },
+                  "order_by": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "field": {
+                          "$ref": "#/$defs/identifier"
+                        },
+                        "direction": {
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "direction"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "by",
+                  "order_by"
+                ],
+                "description": "ROW_NUMBER selects one canonical record per key; priority asc is always the first sort key. Tie checks are generated."
+              }
+            },
+            "required": [
+              "source",
+              "fields"
+            ]
+          },
+          "description": "One STTM per canonical entity; keys must match model.entities."
+        }
+      },
+      "required": [
+        "entities"
+      ]
+    },
+    "assurance": {
+      "type": "object",
+      "title": "Prove",
+      "description": "Product-wide quality-gate policy and per-entity reconciliation, preservation and declarative tests.",
+      "additionalProperties": false,
+      "properties": {
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "on_failure": {
+              "description": "The publication dependency gate is mandatory: all generated quality checks must pass before publication.",
+              "const": "block"
+            }
+          },
+          "required": [
+            "on_failure"
+          ]
+        },
+        "entities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "title": "Entity assurance",
+            "additionalProperties": false,
+            "description": "Reconciliation, preservation and tests for one published canonical entity.",
+            "properties": {
+              "reconciliation": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "allow": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "inner_unmatched",
+                        "filtered",
+                        "deduplicated",
+                        "multiplied"
+                      ]
+                    },
+                    "default": []
+                  }
+                },
+                "description": "Every source record is tracked from base to final output. All exceptions must be explicitly listed here; audit still reports them."
+              },
+              "preservation": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "const": "snapshot"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "description": "Generate CREATE TABLE AS SELECT * snapshots for all input tables. Execute before transformations, snapshots fail if target exists."
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "const": "external"
+                      },
+                      "reference": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "reference"
+                    ],
+                    "description": "Raw source retention is guaranteed externally, not by this compiler. Include an accountable location."
+                  }
+                ]
+              },
+              "tests": {
+                "type": "object",
+                "description": "Authoritative, reusable business tests. Acceptance criteria reference these IDs through check_ids. Tests return failures=0 on success and block publication on failure.",
+                "propertyNames": {
+                  "$ref": "#/$defs/referenceId"
+                },
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "type": {
+                          "const": "accepted_values"
+                        },
+                        "column": {
+                          "$ref": "#/$defs/identifier"
+                        },
+                        "values": {
+                          "type": "array",
+                          "minItems": 1,
+                          "uniqueItems": true,
+                          "items": {
+                            "type": [
+                              "string",
+                              "number",
+                              "boolean"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "column",
+                        "values"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "type": {
+                          "const": "relationships"
+                        },
+                        "column": {
+                          "$ref": "#/$defs/identifier"
+                        },
+                        "source": {
+                          "$ref": "#/$defs/referenceId"
+                        },
+                        "field": {
+                          "$ref": "#/$defs/identifier"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "column",
+                        "source",
+                        "field"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "type": {
+                          "const": "expression"
+                        },
+                        "predicate": {
+                          "$ref": "#/$defs/predicate",
+                          "description": "Predicate evaluated on staging alias t. NULL/UNKNOWN fails (use is_null when needed)."
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "predicate"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "type": {
+                          "const": "expected_rows"
+                        },
+                        "inputs": {
+                          "type": "object",
+                          "minProperties": 1,
+                          "propertyNames": {
+                            "$ref": "#/$defs/referenceId"
+                          },
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": [
+                                  "string",
+                                  "number",
+                                  "boolean",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "expected": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "inputs",
+                        "expected"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "reconciliation",
+              "preservation"
+            ]
+          },
+          "description": "Per-entity assurance definitions keyed by model ID."
+        }
+      },
+      "required": [
+        "quality",
+        "entities"
+      ]
+    },
+    "delivery": {
+      "type": "object",
+      "title": "Deliver",
+      "description": "Physical publication target, output dialect and paths, execution connection, refresh and recovery intent.",
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Optional local artifact directory, relative to the directory containing this YAML file (not the current working directory). For example: ./generated or ../build. Absolute paths are not allowed. CLI --out overrides this value with a warning.",
+          "examples": [
+            "./generated",
+            "../dist"
+          ]
+        },
+        "artifact_paths": {
+          "type": "object",
+          "title": "Artifact directories",
+          "description": "Optional directory overrides relative to each product output folder. Omitted fields retain the default layout. SQL role overrides are also product-relative. project_plans is relative to the shared project output root and must agree across selected products. Use forward slashes; the editor confines all output to its workspace. Native builds require product artifacts to stay inside their run directory.",
+          "additionalProperties": false,
+          "properties": {
+            "sql": {"$ref": "#/$defs/artifact_directory", "default": "sql", "description": "SQL root. Defaults to sql; role subfolders are appended unless overridden."},
+            "tests": {"$ref": "#/$defs/artifact_directory", "default": "tests", "description": "Standalone test-pack root; each model keeps its own pack folder. Does not enable test export."},
+            "plans": {"$ref": "#/$defs/artifact_directory", "default": "plans", "description": "Model and combined product dependency plans."},
+            "metadata": {"$ref": "#/$defs/artifact_directory", "default": "metadata"},
+            "lineage": {"$ref": "#/$defs/artifact_directory", "default": "lineage"},
+            "documentation": {"$ref": "#/$defs/artifact_directory", "default": "documentation"},
+            "project_plans": {"$ref": "#/$defs/artifact_directory", "default": ".", "description": "Shared project plans and native run manifests, relative to the shared output root. All selected products must agree."},
+            "transformations": {"$ref": "#/$defs/artifact_directory", "description": "Override canonical SQL directory; default is <sql>/transformations."},
+            "quality": {"$ref": "#/$defs/artifact_directory", "description": "Override quality SQL directory; default is <sql>/quality."},
+            "preservation": {"$ref": "#/$defs/artifact_directory", "description": "Override preservation SQL directory; default is <sql>/preservation."},
+            "publication": {"$ref": "#/$defs/artifact_directory", "description": "Override publication SQL directory; default is <sql>/publication."}
+          }
+        },
+        "dialect": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "default": "spark",
+          "description": "SQLGlot output dialect. All dialects use one SQLGlot translation service and SQLFluff dialect-aware grammar gate. SQLFluff must support the same dialect (spark maps to SQLFluff sparksql). No grammar fallback. CLI --dialect overrides YAML with a warning.",
+          "examples": [
+            "spark",
+            "databricks",
+            "snowflake",
+            "bigquery",
+            "postgres",
+            "duckdb",
+            "trino",
+            "tsql",
+            "sqlite"
+          ]
+        },
+        "execution": {
+          "type": "object",
+          "description": "Optional database execution configuration. Required for cadeo build; compile remains offline.",
+          "additionalProperties": false,
+          "properties": {
+            "connection": {
+              "$ref": "#/$defs/identifier",
+              "description": "Reference to a connection in the shared connections registry; its URL comes from the named environment variable."
+            }
+          },
+          "required": [
+            "connection"
+          ]
+        },
+        "refresh": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schedule": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "5-field cron expression. Operational metadata; not executed by the compiler."
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "IANA timezone e.g. Africa/Johannesburg"
+            }
+          },
+          "required": [
+            "schedule",
+            "timezone"
+          ]
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "strategy": {
+              "enum": [
+                "rerun",
+                "restore"
+              ]
+            },
+            "max_attempts": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "runbook": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "strategy",
+            "max_attempts",
+            "runbook"
+          ]
+        },
+        "targets": {
+          "type": "object",
+          "title": "Published table targets",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "title": "Published model table",
+            "description": "The physical target for one canonical entity. Publication is blocked until its quality gate passes.",
+            "additionalProperties": false,
+            "properties": {
+              "table": {
+                "$ref": "#/$defs/qualifiedIdentifier",
+                "description": "Authoritative published data interface. Only this property defines the target table/view."
+              }
+            },
+            "required": [
+              "table"
+            ]
+          },
+          "description": "Map each model ID to its one published table. The same IDs must appear in model, mapping and assurance."
+        }
+      },
+      "required": [
+        "targets",
+        "refresh",
+        "recovery"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "spec_version",
+    "definition",
+    "model",
+    "sources",
+    "mapping",
+    "assurance",
+    "delivery"
+  ],
+  "$defs": {
+    "artifact_directory": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Relative directory using forward slashes. Dot selects the anchor folder. Absolute paths, drive letters, backslashes and control characters are rejected. Parent traversal is allowed for compile-only layouts within the editor workspace."
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "qualifiedIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*){0,2}$"
+    },
+    "columnReference": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "column": {
+              "$ref": "#/$defs/columnReference"
+            }
+          },
+          "required": [
+            "column"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "literal": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "literal"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "concat": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "concat"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "coalesce": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "coalesce"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "case": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "when": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "if": {
+                        "$ref": "#/$defs/predicate"
+                      },
+                      "then": {
+                        "$ref": "#/$defs/value"
+                      }
+                    },
+                    "required": [
+                      "if",
+                      "then"
+                    ]
+                  }
+                },
+                "else": {
+                  "$ref": "#/$defs/value"
+                }
+              },
+              "required": [
+                "when",
+                "else"
+              ]
+            }
+          },
+          "required": [
+            "case"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "call": {
+              "type": "object",
+              "description": "Structured database function call; the selected JSON Schema may restrict name to an enum for a dropdown. The database must provide the function.",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "maxLength": 128,
+                  "description": "SQL function name. Override with enum in a custom schema to present a dropdown."
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/value"
+                  },
+                  "maxItems": 32
+                }
+              },
+              "required": [
+                "name",
+                "args"
+              ]
+            }
+          },
+          "required": [
+            "call"
+          ]
+        }
+      ],
+      "description": "Structured value expression. SQL functions use call.name and call.args; custom schemas can constrain function choices."
+    },
+    "predicate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "eq": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "eq"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ne": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "ne"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gt": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "gt"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gte": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "gte"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lt": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "lt"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lte": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          },
+          "required": [
+            "lte"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "and": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/predicate"
+              }
+            }
+          },
+          "required": [
+            "and"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "or": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/predicate"
+              }
+            }
+          },
+          "required": [
+            "or"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/predicate"
+            }
+          },
+          "required": [
+            "not"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "is_null": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "required": [
+            "is_null"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "is_not_null": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "required": [
+            "is_not_null"
+          ]
+        }
+      ],
+      "description": "Structured Boolean expression: comparisons, AND, OR, NOT, NULL tests."
+    },
+    "attribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "float",
+            "boolean",
+            "date",
+            "timestamp"
+          ]
+        },
+        "nullable": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "referenceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "checkId": {
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*/[^\\s/]+$",
+      "description": "Model-scoped check ID, for example devices/not_null:device_id or merchants/canonical_key_unique. Select from the authoritative check registry."
+    },
+    "canonicalAttribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "float",
+            "boolean",
+            "date",
+            "timestamp"
+          ],
+          "title": "Canonical data type",
+          "description": "Logical data type of the published attribute. Choose the intended target type rather than copying source database type verbatim."
+        },
+        "nullable": {
+          "type": "boolean",
+          "default": true,
+          "title": "Allow null values",
+          "description": "Set false for mandatory attributes and for every attribute used in model.unique_key_attributes. Set true only when the business meaning allows an unknown/missing value."
+        },
+        "requirement_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/referenceId"
+          },
+          "description": "Select business requirement IDs defined under definition.requirements that explain why this attribute is needed. Definitions belong there; only references go here.",
+          "title": "Business requirement references"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "description": "A single canonical output attribute with its logical type, nullability and business requirement links."
+    }
+  },
+  "x-schema-version": "0.8.5"
+}
