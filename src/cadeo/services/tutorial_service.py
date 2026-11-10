@@ -130,7 +130,7 @@ class TutorialService:
                          'merchant_name': 'Harbour Foods', 'service_name': 'Card payments', 'connection_status': 'inactive'},
                         {'connection_id': 'D3', 'merchant_id': 'M2', 'service_id': 'S9',
                          'merchant_name': 'City Pharmacy', 'service_name': None, 'connection_status': 'active'}]}}
-        doc = {'schema': {'path': 'product.schema.json', 'version': '0.8.7'}, 'spec_version': '0.8.7',
+        doc = {'schema': {'path': 'product.schema.json', 'version': '0.8.8'}, 'spec_version': '0.8.8',
             'definition': {'name': 'connection_tutorial',
                 'description': 'Current payment connections for service support',
                 'owner': {'team': 'Service Operations', 'contact': 'service-owner@example.org'},

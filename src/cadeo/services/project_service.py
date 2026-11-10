@@ -170,6 +170,9 @@ class ProjectService:
         """
         if test_pack not in ("none", "sql"):
             raise SpecificationValidationError(f"Unknown test-pack exporter: {test_pack}")
+        from cadeo.services.bootstrap_service import BootstrapService
+        for _, _, spec in project.products:
+            BootstrapService.require_reviewed(spec.definition)
         plan = self.plan(project, targets)
         manifest_dir = self.plan_directory(project, plan.products, output, build_id)
         wanted = set(plan.products)

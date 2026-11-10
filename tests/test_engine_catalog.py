@@ -61,6 +61,7 @@ class EngineCatalogTests(TestCase):
             rows = EngineCatalogService().available(installed_only=True)
         snowflake = next(x for x in rows if x['id']=='snowflake')
         self.assertTrue(snowflake['driver_loaded'])
+        self.assertFalse(snowflake['schema_introspection_capable'])
         self.assertFalse(snowflake['build_ready'])
         self.assertIsNone(snowflake['publication_strategy'])
         with mock.patch('cadeo.brokers.execution_broker.create_engine') as engine:
@@ -73,6 +74,7 @@ class EngineCatalogTests(TestCase):
         sample = EngineCatalogService.inspect_url('sqlite:///:memory:', connect=True)
         self.assertTrue(sample['driver_loaded'])
         self.assertTrue(sample['connected'])
+        self.assertTrue(sample['schema_introspection_capable'])
         self.assertEqual('transactional_ddl', sample['publication_strategy'])
         self.assertEqual('sqlite', sample['sql_dialect'])
         with sqlalchemy_connection(':memory:') as conn:

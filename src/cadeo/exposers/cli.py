@@ -18,7 +18,7 @@ from cadeo.services.product_service import ProductService
 from cadeo.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.7"
+VERSION = "0.8.8"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -99,6 +99,19 @@ def main(argv: list[str] | None = None) -> int:
     discover.add_argument("--profile", action="store_true",
                           help="Also scan full tables for row counts, null counts and duplicate keys")
     discover.add_argument("--json", action="store_true", help="Print a machine-readable report")
+
+    bootstrap = commands.add_parser(
+        "bootstrap", help="Create a review-required draft from a table or schema artifact")
+    bootstrap.add_argument("source", nargs="?", type=Path,
+                           help="SQL DDL, CSV, or Parquet file; omit for --table")
+    bootstrap.add_argument("--table", help="Qualified table in a configured SQLAlchemy catalog")
+    bootstrap.add_argument("--url-env", help="Environment variable containing the catalog SQLAlchemy URL")
+    bootstrap.add_argument("--connection", default="source", help="Connection ID for a live table (default: source)")
+    bootstrap.add_argument("--dialect", help="SQLGlot dialect for DDL parsing")
+    bootstrap.add_argument("--name", help="Override the generated product identifier")
+    bootstrap.add_argument("--out", type=Path, help="Draft YAML path (default: product.yaml)")
+    bootstrap.add_argument("--refresh", type=Path,
+                           help="Existing bootstrap draft to three-way merge; writes a separate proposal and diff")
 
     verify = commands.add_parser("verify", help="Verify existing SQLite data through the SQLAlchemy execution broker")
     verify.add_argument("spec", type=Path)
@@ -197,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
                 for item in available:
                     installed = "ready" if item['driver_loaded'] else "not installed"
                     build_ready = "build-ready" if item['build_ready'] else "not build-ready"
-                    print(f"  {item['id']:18} {installed:14} {build_ready:17} {item['name']}")
+                    introspection = "inspect-ready" if item['schema_introspection_capable'] else "no introspection"
+                    print(f"  {item['id']:18} {installed:14} {introspection:17} {build_ready:17} {item['name']}")
                     if not item['driver_loaded'] and item['install_command']:
                         print(f"      Optional install: {item['install_command']}")
                 if selected:
@@ -210,6 +224,57 @@ def main(argv: list[str] | None = None) -> int:
             if selected is not None and (not selected['driver_loaded'] or
                                          (args.connect and not selected['connected'])):
                 return 1
+        elif args.command == "bootstrap":
+            from cadeo.services.bootstrap_service import BootstrapService
+            from cadeo.services.engine_catalog_service import EngineCatalogService
+            bootstrap_service = BootstrapService()
+            if args.table:
+                if args.source is not None:
+                    raise SpecificationValidationError("Use either a source artifact or --table, not both")
+                if not args.url_env:
+                    raise SpecificationValidationError("--table requires --url-env")
+                url = os.environ.get(args.url_env)
+                if not url:
+                    raise SpecificationValidationError(f"Environment variable {args.url_env} is not set")
+                capability = EngineCatalogService.inspect_url(url, connect=True)
+                if not capability['driver_loaded'] or not capability['connected']:
+                    raise SpecificationValidationError("Could not connect through the configured SQLAlchemy driver")
+                if not capability['schema_introspection_capable']:
+                    raise SpecificationValidationError(
+                        f"Schema introspection is not supported for backend '{capability['backend']}'")
+                source = bootstrap_service.from_table(url, args.table, args.connection, args.url_env)
+            else:
+                if args.url_env:
+                    raise SpecificationValidationError("--url-env is only used with --table")
+                if args.source is None:
+                    raise SpecificationValidationError("Provide a SQL DDL, CSV, or Parquet source file")
+                source = bootstrap_service.from_artifact(args.source, args.dialect)
+            output = args.out or Path("product.yaml")
+            if args.refresh:
+                if args.out is None:
+                    output = args.refresh.with_name(args.refresh.stem + ".refreshed.yaml")
+                if output.resolve() == args.refresh.resolve():
+                    raise SpecificationValidationError("Refresh output must not overwrite the existing draft")
+                if output.parent.resolve() != args.refresh.parent.resolve():
+                    raise SpecificationValidationError("Refresh output must stay beside the existing draft and schema")
+                diff_path = output.with_suffix(".diff")
+                if files.exists(output) or files.exists(diff_path):
+                    raise FileExistsError(f"Refresh proposal or diff already exists: {output}")
+                current = specifications.read_document(args.refresh)
+                proposal, diff = bootstrap_service.refresh(current, source)
+                files.write_text(output, bootstrap_service.serialize(proposal), overwrite=False)
+                files.write_text(diff_path, diff, overwrite=False)
+                print(f"Review proposal: {output}")
+                print(f"Generated diff: {diff_path}")
+            else:
+                schema_path = output.with_name(f"{output.stem}.schema-v{VERSION}.json")
+                if files.exists(output) or files.exists(schema_path):
+                    raise FileExistsError(f"Draft or adjacent schema already exists: {output}")
+                draft = bootstrap_service.draft(source, args.name, schema_path.name)
+                files.write_text(schema_path, specifications.schema_json(), overwrite=False)
+                files.write_text(output, bootstrap_service.serialize(draft), overwrite=False)
+                print(f"Created review-required draft: {output}")
+                print(f"Review all items in bootstrap.review_required before compilation or build.")
         elif args.command == "validate":
             for spec_path, product in resolved_items(args.spec):
                 print(f"Valid: {spec_path} — {product.product.name} ({len(product.canonical.attributes)} fields)")

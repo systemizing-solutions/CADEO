@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.7.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.8.8.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -977,17 +977,18 @@ function renderContextActions() {
   const actions=[
     [['validate','Validate']],
     [['erd','View canonical ERD'],['validate','Validate'],['trace','Lineage']],
-    [['discover','Discover sources'],['validate','Validate']],
+    [['bootstrap','Bootstrap draft'],['discover','Discover sources'],['validate','Validate']],
     [['compile','Compile SQL (offline)'],['trace','Lineage']],
     [['evidence','Review evidence'],['checks','Review checks'],['validate','Validate']],
     [['evidence','Review evidence'],['compile','Compile SQL (offline)'],['plan','Review execution plan'],['build','Build, run checks & publish']],
   ][STAGES.indexOf(state.activeStage)] || [];
+  el('bootstrapOptions').classList.toggle('hidden',state.activeStage!=='sources');
   const container=el('contextActions');container.replaceChildren();
   actions.forEach(([id,label])=>container.append(button(label,()=> id==='evidence' ? openEvidence() : id==='trace' ? openVisualGraph('lineage') : id==='erd' ? openVisualGraph('erd') : id==='plan' ? openVisualGraph('dependencies') : runAction(id),id==='build'?'btn primary':'btn secondary')));
   const help={
     definition:'Validate checks the specification structure and rules; it does not execute SQL.',
     model:'Review the canonical model, then validate the specification.',
-    sources:'Discover reads configured sources. Validation checks the specification without connecting to a database.',
+    sources:'Bootstrap creates a review-required draft from source metadata. Discover compares configured sources with an existing contract.',
     mapping:'Generated checks are evaluated during a build. Review evidence to see results from the latest run.',
     assurance:'Review evidence shows results from a build; viewing it does not execute checks.',
     delivery:'Compile SQL (offline) generates and syntax-checks SQL for inspection; it does not execute SQL or connect to a database. Build, run checks & publish executes the plan using the configured database connection; failed quality gates block publication. To run one check without publishing, export an SQL test pack and run its runner with --check <check-id-from-manifest>.'
@@ -1038,7 +1039,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.7.schema.json' ? 'Bundled product schema (v0.8.7)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.8.8.schema.json' ? 'Bundled product schema (v0.8.8)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -1143,7 +1144,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.7',
+    spec_version: state.schema?.['x-schema-version'] || '0.8.8',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -1261,6 +1262,38 @@ async function runAction(explicitAction) {
   if (control && !control.classList.contains('hidden'))busy(control,true);
   try {
     if (action==='validate') { await validateDraft(); return; }
+    if (action==='bootstrap') {
+      if (state.rawChanged) await applyYaml();
+      if (state.dirty) {
+        const message=state.path
+          ? 'Save the current specification before creating a bootstrap draft?'
+          : 'Replace the unsaved new specification with a bootstrap draft?';
+        if (!window.confirm(message)) return;
+        if (state.path) await saveFile();
+      }
+      const source=el('bootstrapSource').value.trim();
+      const table=el('bootstrapTable').value.trim();
+      const refresh=el('bootstrapRefresh').value.trim();
+      const output=el('bootstrapOutput').value.trim();
+      const result=await request('/api/action','POST',{
+        action:'bootstrap',source:source||null,table:source?null:table||null,
+        url_env:source?null:el('bootstrapUrlEnv').value.trim()||null,
+        connection:el('bootstrapConnection').value.trim()||'source',
+        dialect:el('bootstrapDialect').value.trim()||null,
+        name:el('bootstrapName').value.trim()||null,
+        out:refresh&&output==='bootstrap.yaml'?null:output||null,
+        refresh:refresh||null
+      });
+      if (state.currentRun !== currentRun) return;
+      await loadFile(result.path);
+      if (result.diff) {
+        const diff=await request('/api/artifact?path='+encodeURIComponent(result.diff));
+        status(`Created review proposal: ${result.path}. Diff: ${result.diff}`,'success',diff.content);
+      } else {
+        status(`Created review-required bootstrap draft: ${result.path}`,'success',result);
+      }
+      return;
+    }
     if (state.rawChanged) await applyYaml();
     if (state.dirty) {
       if (!window.confirm(`${titleCase(action)} works from saved YAML. Save your current changes before continuing?`)) return;
@@ -1797,7 +1830,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.7.schema.json', false);
+    await activateSchema('schemas/product-v0.8.8.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

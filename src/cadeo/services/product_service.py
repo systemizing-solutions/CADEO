@@ -71,6 +71,8 @@ class ProductService:
                 bundle = self.validate(spec_path)
             except SpecificationValidationError as error:
                 raise SpecificationValidationError(f"{spec_path}: {error}") from error
+            from cadeo.services.bootstrap_service import BootstrapService
+            BootstrapService.require_reviewed(bundle.definition)
             for spec in bundle.models:
                 trace = TraceabilityService().build(spec)
                 warnings.extend(f"{spec_path} [{spec.product.name}]: traceability: {message}"

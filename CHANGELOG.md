@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.8 - Reviewable source bootstrap (2026-11-10)
+
+- Add `cadeo bootstrap` for live SQLAlchemy tables, SQL DDL, CSV headers/sample values, and Parquet schema metadata. Generate source datasets, candidate canonical fields, and provisional mappings without inferring business approval.
+- Mark imported drafts with a review checklist covering business meaning, grain, source/model keys, ownership, mapping intent, and acceptance criteria. Validation remains available, but compile and build are blocked until review is explicitly completed.
+- Expose bootstrap and safe refresh in the editor's Connect stage, reusing the workspace-scoped action API and loading created drafts directly into the editor.
+- Add independent schema-introspection capability reporting to `cadeo engines`; introspection readiness does not imply compiler support or certified transactional publication.
+- Refresh imports through a three-way merge against the last generated baseline. Preserve changed hand-authored values and emit a separate proposal plus unified diff; never overwrite the existing draft.
+- Align the application, bundled schema, current examples and editor defaults to v0.8.8. Keep historical pinned schemas available.
+
 ## 0.8.7 - Distinct tutorial exercises (2026-11-09)
 
 - Separate tutorial source and destination connections and SQLite databases. Read source files through explicitly qualified, read-only attachments while preserving transactional destination publication; other backends still reject cross-connection builds.

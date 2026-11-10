@@ -10,7 +10,9 @@ from __future__ import annotations
 from hashlib import sha256
 from html import escape
 import json
+import os
 from pathlib import Path
+import re
 import secrets
 from typing import Any
 from urllib.parse import urlparse
@@ -206,7 +208,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.7')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.8.8')
 
     @app.get('/tutorial')
     def tutorial_page():
@@ -689,8 +691,8 @@ def create_app(workspace: Path, *, overwrite: bool = False):
     @app.get('/api/artifact')
     def artifact():
         path = workspace_path(request.args.get('path'))
-        if not path.is_file() or path.suffix.lower() not in ('.sql','.md','.json','.mmd'):
-            raise WorkspaceError('Only generated SQL, Markdown and plan files can be previewed')
+        if not path.is_file() or path.suffix.lower() not in ('.sql','.md','.json','.mmd','.diff'):
+            raise WorkspaceError('Only generated SQL, Markdown, plan, and diff files can be previewed')
         content = files.read_text(path)
         if len(content) > 1024*1024:
             raise WorkspaceError('Artifact too large for browser preview')
@@ -700,11 +702,91 @@ def create_app(workspace: Path, *, overwrite: bool = False):
     def action():
         data = input_json()
         name = data.get('action')
-        allowed = {'validate', 'trace', 'checks', 'plan', 'compile', 'build', 'discover', 'verify'}
+        allowed = {'validate', 'trace', 'checks', 'plan', 'compile', 'build', 'discover', 'verify', 'bootstrap'}
         if name not in allowed:
             raise WorkspaceError(f'Unknown editor action: {name}')
         if installations.is_installing() and name in ('build', 'discover', 'verify'):
             raise WorkspaceError('Driver installation is running; retry database actions when it finishes')
+        if name == 'bootstrap':
+            if installations.is_installing() and data.get('table'):
+                raise WorkspaceError('Driver installation is running; retry live-table bootstrap when it finishes')
+            from cadeo.services.bootstrap_service import BootstrapService
+            from cadeo.services.engine_catalog_service import EngineCatalogService
+            service = BootstrapService()
+            source_path = data.get('source')
+            table = data.get('table')
+            url_env = data.get('url_env')
+            if source_path:
+                if table or url_env:
+                    raise WorkspaceError('Use either a source artifact or a live table')
+                artifact_path = workspace_path(source_path)
+                if not artifact_path.is_file():
+                    raise WorkspaceError('Bootstrap source artifact does not exist')
+                dialect = data.get('dialect') or None
+                if dialect is not None and not isinstance(dialect, str):
+                    raise WorkspaceError('DDL dialect must be a string')
+                source = service.from_artifact(artifact_path, dialect)
+            elif table:
+                connection_id = data.get('connection', 'source')
+                if (not isinstance(table, str) or not isinstance(connection_id, str) or
+                        not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', connection_id)):
+                    raise WorkspaceError('Live table and connection ID must be valid strings')
+                if not isinstance(url_env, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', url_env):
+                    raise WorkspaceError('Live table bootstrap requires an environment-variable name')
+                url = os.environ.get(url_env)
+                if not url:
+                    raise WorkspaceError(f'Environment variable {url_env} is not set')
+                capability = EngineCatalogService.inspect_url(url, connect=True)
+                if not capability['driver_loaded'] or not capability['connected']:
+                    raise WorkspaceError('Could not connect through the configured SQLAlchemy driver')
+                if not capability['schema_introspection_capable']:
+                    raise WorkspaceError(
+                        f"Schema introspection is not supported for backend '{capability['backend']}'")
+                source = service.from_table(url, table, connection_id, url_env)
+            else:
+                raise WorkspaceError('Provide a workspace artifact path or a live table')
+
+            refresh_value = data.get('refresh')
+            output_value = data.get('out')
+            if refresh_value:
+                refresh_path = workspace_path(refresh_value, yaml_only=True)
+                preflight_schema_refs(refresh_path)
+                if not output_value:
+                    output_path = refresh_path.with_name(refresh_path.stem + '.refreshed.yaml')
+                else:
+                    output_path = workspace_path(output_value, yaml_only=True)
+                if output_path.resolve() == refresh_path.resolve():
+                    raise WorkspaceError('Refresh output must not overwrite the existing draft')
+                if output_path.parent.resolve() != refresh_path.parent.resolve():
+                    raise WorkspaceError('Refresh output must stay beside the existing draft and schema')
+                diff_path = output_path.with_suffix('.diff')
+                if files.exists(output_path) or files.exists(diff_path):
+                    raise FileExistsError(f'Refresh proposal or diff already exists: {relative(output_path)}')
+                current = SpecificationService(files).read_document(refresh_path)
+                proposal, diff = service.refresh(current, source)
+                files.write_text(output_path, service.serialize(proposal), overwrite=False)
+                files.write_text(diff_path, diff, overwrite=False)
+                return jsonify(path=relative(output_path), diff=relative(diff_path),
+                               status=proposal['bootstrap']['status'])
+
+            if not isinstance(output_value, str) or not output_value.strip():
+                raise WorkspaceError('Choose an output YAML path for the bootstrap draft')
+            output_path = workspace_path(output_value, yaml_only=True)
+            schema_text = SpecificationService(files).schema_json()
+            version = json.loads(schema_text)['x-schema-version']
+            schema_path = inside(output_path.with_name(f'{output_path.stem}.schema-v{version}.json'))
+            if files.exists(output_path) or files.exists(schema_path):
+                raise FileExistsError(f'Draft or adjacent schema already exists: {relative(output_path)}')
+            product_name = data.get('name')
+            if product_name is not None and not isinstance(product_name, str):
+                raise WorkspaceError('Product name must be a string')
+            draft = service.draft(source, product_name, schema_path.name)
+            specifications = SpecificationService(files)
+            specifications.parse(draft)
+            files.write_text(schema_path, schema_text, overwrite=False)
+            files.write_text(output_path, service.serialize(draft), overwrite=False)
+            return jsonify(path=relative(output_path), schema=relative(schema_path),
+                           status=draft['bootstrap']['status'])
         path = workspace_path(data.get('path'))
         if not path.exists() or (path.is_file() and path.suffix.lower() not in ('.yaml', '.yml')):
             raise WorkspaceError('Select an existing YAML specification or project directory')

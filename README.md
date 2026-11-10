@@ -37,6 +37,16 @@ publication. `cadeo dialects` and `cadeo engines` show the available options.
 In short: author, validate, plan, compile, then optionally build and inspect the
 evidence. The diagram renders on platforms that support Mermaid.
 
+`cadeo bootstrap` can start a review-required draft from a live SQLAlchemy table,
+SQL DDL, CSV, or Parquet metadata. It proposes source fields, candidate keys,
+canonical attributes, and direct field mappings only. Business meaning, record
+grain, inferred field types, ownership, mapping intent, and acceptance criteria remain explicitly
+unapproved. `cadeo validate` can inspect the draft, but compile and build are
+blocked until its review checklist is completed. This is separate from
+`cadeo discover`, which compares an existing contract with live sources. The
+same bootstrap and refresh workflow is available in the editor's **Connect**
+stage.
+
 ### The contract
 
 | Section | Describes | Supports |
@@ -154,11 +164,11 @@ for its separate SQLite verification action, not a build-connection override.
 
 ## One product, multiple tables
 
-The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.7.json`](examples/multi_model/product.schema-v0.8.7.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
+The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product-v0.8.8.schema.json`](examples/schemas/product-v0.8.8.schema.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
 
 ```yaml
-schema: {path: product.schema-v0.8.7.json, version: "0.8.7"}
-spec_version: "0.8.7"
+schema: {path: ../schemas/product-v0.8.8.schema.json, version: "0.8.8"}
+spec_version: "0.8.8"
 
 definition:
   name: merchant_operations
@@ -254,9 +264,15 @@ cadeo build examples/multi_model/ --target merchant_operations.devices
 # Human-readable traceability and evidence
 cadeo trace examples/multi_model/product.yaml
 cadeo evidence examples/multi_model/product.yaml
+# Bootstrap from a common artifact or a supported live SQLAlchemy catalog
+cadeo bootstrap devices.csv --out devices.yaml
+cadeo bootstrap source.sql --dialect postgres --out source.yaml
+CADEO_SOURCE_URL=sqlite:///source.db cadeo bootstrap --table devices --url-env CADEO_SOURCE_URL --out devices.yaml
+# Refresh produces a separate YAML proposal and unified diff; it never replaces the source draft
+cadeo bootstrap updated.csv --refresh devices.yaml
 ```
 
-For native builds, configure an SQLAlchemy connection URL in the environment referenced by `sources.connections` and `delivery.execution`. `cadeo compile` produces assets without requiring a database connection. `cadeo build` executes the model DAG using **SQLAlchemy**, after compilation through **SQLGlot** and dialect validation through **SQLFluff**. Source readiness, preservation, staging, reconciliation, quality checks and publication follow the plan. A failed check prevents subsequent publication, and the run manifest stores check results and step statuses. Transaction-safe publication remains restricted to certified engines; an installed DBAPI driver does not imply safe deployment. `cadeo engines` reports actual driver availability.
+For native builds, configure an SQLAlchemy connection URL in the environment referenced by `sources.connections` and `delivery.execution`. `cadeo compile` produces assets without requiring a database connection. `cadeo build` executes the model DAG using **SQLAlchemy**, after compilation through **SQLGlot** and dialect validation through **SQLFluff**. Source readiness, preservation, staging, reconciliation, quality checks and publication follow the plan. A failed check prevents subsequent publication, and the run manifest stores check results and step statuses. Transaction-safe publication remains restricted to certified engines; an installed DBAPI driver does not imply safe deployment. `cadeo engines` reports driver loading, schema-introspection readiness, compiler support and publication certification separately.
 
 To verify a real two-model end-to-end build and deliberately failed rerun against disposable SQLite data:
 
@@ -269,7 +285,7 @@ All database operations, including SQLite, are executed through SQLAlchemy. The 
 ## Generated deliverables
 
 The output setting is a **root directory**, not a flat collection of files.
-CADEO v0.8.7 creates one folder named after each product's `definition.name`.
+CADEO v0.8.8 creates one folder named after each product's `definition.name`.
 All models belonging to that product stay together, with model-qualified
 filenames such as `merchant_operations.devices.checks.sql`.
 
@@ -310,11 +326,11 @@ combined `acceptance-results.md` in `<project-output-root>/<run-id>/` (by defaul
 report with a relative link to that manifest; `--report` can still select a
 different manifest location.
 
-The built-in YAML/JSON Schema version matches app v0.8.7. Compatible specifications
+The built-in YAML/JSON Schema version matches app v0.8.8. Compatible specifications
 pinned to older schemas remain valid: validation uses the selected schema's
 `spec_version` constraint, not the app release number. To use fields available in
 the current schema, update `spec_version`, `schema.version` and `schema.path`
-together to the v0.8.7 schema. Recompile
+together to the v0.8.8 schema. Recompile
 to produce the new layout and update consumers that hard-code flat paths. Use
 the artifact paths returned by compilation or emitted plans where possible.
 Existing flat output files and historical build runs are not moved or deleted.
@@ -449,7 +465,7 @@ python -m pytest -q
 node --check src/cadeo/web/editor.js
 ```
 
-The v0.8.7 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
+The v0.8.8 suite covers source bootstrap and refresh, matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
 
 ## Packaging and release
 

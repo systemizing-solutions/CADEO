@@ -26,6 +26,11 @@ PUBLICATION_STRATEGIES = {
     "postgresql": "transactional_ddl",
     "duckdb": "transactional_ddl_probed",
 }
+# Schema reflection is independently supported by these SQLAlchemy backends.
+# This capability does not certify SQL compilation or safe publication.
+SCHEMA_INTROSPECTION_BACKENDS = {
+    "sqlite", "postgresql", "mysql", "mariadb", "oracle", "mssql", "duckdb",
+}
 # Only map equivalent dialect names; no generic ANSI fallback. Actual support
 # still requires SQLGlot AND SQLFluff to recognise the output dialect.
 SQLGLOT_FOR_BACKEND = {
@@ -144,6 +149,7 @@ class EngineCatalogService:
                 'driver_loaded': usable is not None,
                 'status': 'driver_loaded' if usable else error,
                 'publication_strategy': publication_strategy,
+                'schema_introspection_capable': bool(usable and backend in SCHEMA_INTROSPECTION_BACKENDS),
                 'sql_dialect': sql_dialect,
                 'compiler_ready': bool(sql_dialect and sql_dialect in compile_dialects),
                 'build_ready': bool(usable and publication_strategy and sql_dialect in compile_dialects),
@@ -171,6 +177,7 @@ class EngineCatalogService:
             'backend': backend, 'driver': drivername,
             'driver_loaded': False, 'connected': None,
             'publication_strategy': PUBLICATION_STRATEGIES.get(backend),
+            'schema_introspection_capable': False,
             'build_capable': False, 'compiler_ready': False,
             'sql_dialect': SQLGLOT_FOR_BACKEND.get(backend), 'error': None,
             'runtime_publication_probe': backend == 'duckdb',
@@ -179,6 +186,7 @@ class EngineCatalogService:
         try:
             engine = create_engine(url)  # Loads BOTH dialect plugin and DBAPI.
             result['driver_loaded'] = True
+            result['schema_introspection_capable'] = backend in SCHEMA_INTROSPECTION_BACKENDS
             if connect:
                 with engine.connect():
                     result['connected'] = True

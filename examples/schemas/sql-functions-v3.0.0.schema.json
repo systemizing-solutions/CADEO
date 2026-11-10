@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cadeo.org/schemas/product/3.0.0",
-  "title": "CADEO: Contract-driven Automation for Data Engineering & Orchestration: Multi-model specification v0.8.7",
+  "title": "CADEO: Contract-driven Automation for Data Engineering & Orchestration: Multi-model specification v0.8.8",
   "description": "One data product containing multiple canonical entities, source-to-target mappings, quality gates and published tables. The six stage registries share stable model IDs.",
   "type": "object",
   "additionalProperties": false,
@@ -29,7 +29,7 @@
       "readOnly": true
     },
     "spec_version": {
-      "const": "0.8.7",
+      "const": "0.8.8",
       "type": "string",
       "description": "One multi-model specification language version."
     },

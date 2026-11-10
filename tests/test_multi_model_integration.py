@@ -8,7 +8,7 @@ def test_editor_saves_and_reopens_incomplete_drafts(tmp_path):
 
     client = create_app(tmp_path).test_client()
     headers = {'X-Editor-Token': client.get('/api/bootstrap').get_json()['token']}
-    document = {'spec_version': '0.8.7', 'definition': TutorialService().document()['definition']}
+    document = {'spec_version': '0.8.8', 'definition': TutorialService().document()['definition']}
     document['definition']['name'] = 'draft_steps'
     response = client.put('/api/document', json={'path': 'draft_steps.yaml', 'document': document},
                           headers=headers)
@@ -942,13 +942,18 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     import yaml
     example=Path(__file__).resolve().parents[1]/'examples/multi_model'
     copy2(example/'product.yaml',tmp_path/'product.yaml')
-    copy2(example/'product.schema-v0.8.7.json',tmp_path/'product.schema-v0.8.7.json')
+    schema_directory=tmp_path/'schemas'
+    schema_directory.mkdir()
+    copy2(example.parent/'schemas'/'product-v0.8.8.schema.json',
+          schema_directory/'product-v0.8.8.schema.json')
     app=create_app(tmp_path)
     client=app.test_client()
     doc=yaml.safe_load((tmp_path/'product.yaml').read_text())
     # Use the production YAML 1.2-style loader so 'on' remains a string.
     from cadeo.services.specification_service import UniqueKeysLoader
     doc=yaml.load((tmp_path/'product.yaml').read_text(), Loader=UniqueKeysLoader)
+    doc['schema']['path']='schemas/product-v0.8.8.schema.json'
+    (tmp_path/'product.yaml').write_text(yaml.safe_dump(doc,sort_keys=False))
     response=client.get('/api/bootstrap')
     if response.status_code!=200: pytest.skip('Flask editor bootstrap requires browser token setup')
     token=response.get_json().get('token')

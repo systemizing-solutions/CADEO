@@ -20,11 +20,11 @@ def serve(route):
         filename=path.removeprefix('/assets/')
         suffix=Path(filename).suffix
         route.fulfill(body=(assets/filename).read_text(),content_type=('text/css' if suffix=='.css' else 'text/javascript'));return
-    if path=='/api/bootstrap': j({'token':'token','workspace':'/workspace','version':'0.8.7'});return
-    if path=='/api/schemas': j({'schemas':['schemas/product-v0.8.7.schema.json']});return
+    if path=='/api/bootstrap': j({'token':'token','workspace':'/workspace','version':'0.8.8'});return
+    if path=='/api/schemas': j({'schemas':['schemas/product-v0.8.8.schema.json']});return
     if path=='/api/schema': j(schema);return
     if path=='/api/files': j({'files':['product.yaml']});return
-    if path=='/api/document': j({'path':'product.yaml','document':document,'yaml':yamltext,'schema':'schemas/product-v0.8.7.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()});return
+    if path=='/api/document': j({'path':'product.yaml','document':document,'yaml':yamltext,'schema':'schemas/product-v0.8.8.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()});return
     if path=='/api/dialects': j({'dialects':['sqlite']});return
     if path=='/api/engines': j({'engines':[]});return
     if path=='/api/engines/installation': j({'job':None,'interpreter':'python','virtual_environment':True});return
@@ -45,12 +45,12 @@ with sync_playwright() as p:
     page.set_content(markup)
     page.add_style_tag(content=(assets/'editor.css').read_text())
     responses={
-      '/api/bootstrap':{'token':'token','workspace':'/workspace','version':'0.8.7'},
-      '/api/schemas':{'schemas':['schemas/product-v0.8.7.schema.json']},
+      '/api/bootstrap':{'token':'token','workspace':'/workspace','version':'0.8.8'},
+      '/api/schemas':{'schemas':['schemas/product-v0.8.8.schema.json']},
       '/api/schema':schema,
       '/api/files':{'files':['product.yaml']},
       '/api/document':{'path':'product.yaml','document':document,'yaml':yamltext,
-        'schema':'schemas/product-v0.8.7.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()},
+        'schema':'schemas/product-v0.8.8.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()},
       '/api/dialects':{'dialects':['sqlite']},
       '/api/engines':{'engines':[]},
       '/api/engines/installation':{'job':None,'interpreter':'python','virtual_environment':True},

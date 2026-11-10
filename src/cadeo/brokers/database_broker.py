@@ -30,6 +30,7 @@ class LiveTable:
     row_count: int | None = None
     null_counts: dict[str, int] | None = None
     duplicate_key_groups: int | None = None
+    primary_key_columns: tuple[str, ...] = ()
 
 
 class DatabaseBrokerContract(Protocol):
@@ -97,9 +98,14 @@ class DatabaseBroker:
                 reflected = inspector.get_columns(name, schema=schema)
                 columns = tuple(LiveColumn(col["name"], _type_family(col["type"]),
                                            bool(col.get("nullable", True))) for col in reflected)
+                primary_key = tuple(inspector.get_pk_constraint(name, schema=schema)
+                                    .get("constrained_columns") or ())
+                columns = tuple(LiveColumn(col.name, col.type,
+                                           False if col.name in primary_key else col.nullable)
+                                for col in columns)
                 available = {col.name for col in columns}
                 if not profile or not set(expected_columns).issubset(available):
-                    return LiveTable(columns)
+                    return LiveTable(columns, primary_key_columns=primary_key)
 
                 # No interpolation of table/column identifiers in SQL text.
                 source_table = table(name, *(column(c) for c in expected_columns), schema=schema)
@@ -121,7 +127,7 @@ class DatabaseBroker:
                     .subquery()
                 )
                 groups = int(connection.execute(select(func.count()).select_from(duplicated)).scalar_one())
-                return LiveTable(columns, int(counts[0]), null_counts, groups)
+                return LiveTable(columns, int(counts[0]), null_counts, groups, primary_key)
         except DatabaseInspectionError:
             raise
         except Exception as error:

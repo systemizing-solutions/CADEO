@@ -124,6 +124,17 @@
         <div class="panel-title">Actions</div>
         <div id="contextActions" class="context-actions"></div>
         <p id="actionHelp" class="panel-desc" aria-live="polite">Validate checks the specification structure and rules; it does not execute SQL.</p>
+        <details id="bootstrapOptions" class="advanced-actions hidden"><summary>Bootstrap source options</summary>
+          <div class="action-field"><label for="bootstrapSource">Workspace artifact (SQL, CSV, Parquet)</label><input id="bootstrapSource" placeholder="sources/devices.csv"></div>
+          <div class="action-field"><label for="bootstrapTable">Or live catalog table</label><input id="bootstrapTable" placeholder="schema.devices"></div>
+          <div class="action-field"><label for="bootstrapUrlEnv">Connection URL environment variable</label><input id="bootstrapUrlEnv" placeholder="CADEO_SOURCE_URL"></div>
+          <div class="action-field"><label for="bootstrapConnection">Connection ID</label><input id="bootstrapConnection" value="source"></div>
+          <div class="action-field"><label for="bootstrapDialect">DDL dialect</label><input id="bootstrapDialect" placeholder="Only for SQL DDL"></div>
+          <div class="action-field"><label for="bootstrapName">Product name (optional)</label><input id="bootstrapName" placeholder="Infer from source name"></div>
+          <div class="action-field"><label for="bootstrapOutput">Draft YAML output</label><input id="bootstrapOutput" value="bootstrap.yaml"></div>
+          <div class="action-field"><label for="bootstrapRefresh">Existing bootstrap draft to refresh (optional)</label><input id="bootstrapRefresh" placeholder="product.yaml"></div>
+          <small>Live credentials stay in the named environment variable. Imported structure is provisional and requires owner review.</small>
+        </details>
         <div class="action-field"><label for="actionScope">Operation scope</label><select id="actionScope"><option value="file">Current specification (draft)</option><option value="project">Entire project (saved YAML)</option></select></div>
         <div class="action-field"><label for="testPackExport">Export standalone SQL checks</label><select id="testPackExport"><option value="none">None</option><option value="sql">SQL test pack</option></select><small>Use the generated runner with --check CHECK_ID from that pack's manifest to run one check without publishing.</small></div>
         <input id="actionSelect" type="hidden" value="validate">
