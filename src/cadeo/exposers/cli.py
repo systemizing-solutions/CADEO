@@ -18,7 +18,7 @@ from cadeo.services.product_service import ProductService
 from cadeo.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.5"
+VERSION = "0.8.7"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.tutorial_action == 'init':
                 tutorial_result = tutorial_service.create(args.path)
                 print(f"Created local tutorial: {tutorial_result['root']}")
-                print('Run this command in your terminal before normal CLI builds:')
+                print('Run these commands in your terminal before normal CLI builds:')
                 print(tutorial_result['environment'])
                 print(f'First build: cadeo build {shlex.quote(str(args.path / "starter/product.yaml"))}')
                 print('Guide: cadeo tutorial guide')

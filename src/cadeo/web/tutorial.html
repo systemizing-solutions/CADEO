@@ -18,6 +18,11 @@
         <h2>1. Start with one source</h2>
         <p>Create local sample data. No database server or extra SQLite driver is needed.</p>
         <p>Operations has three devices: D1, D2, and D3. Start with one source table and one output. Each output row represents one device ID.</p>
+        <table aria-label="Source and destination databases"><thead><tr><th>Role</th><th>Connection</th><th>Database</th></tr></thead><tbody>
+          <tr><td>Read inputs</td><td><code>source</code></td><td><code>source.sqlite</code></td></tr>
+          <tr><td>Build and publish</td><td><code>destination</code></td><td><code>destination.sqlite</code></td></tr>
+        </tbody></table>
+        <p>Inputs stay in the source database. Snapshots, staging tables and published outputs live in the destination database. The source is attached read-only during a build.</p>
         <div class="tutorial-actions"><button id="tutorialInit" class="btn primary">Create local example</button><a data-spec="starter" data-stage="delivery" class="btn secondary">Open starter</a><button data-build="starter" class="btn secondary">Build starter</button></div>
         <p>Expect three rows in <code>tutorial_device</code>. M1 owns two devices. Do not use merchant ID as the device key.</p>
       </section>
@@ -48,7 +53,9 @@
           <tr><td>input_devices</td><td>tutorial_connection</td><td>One device connection</td></tr>
         </tbody></table>
         <p>The connection model reads the two canonical models through explicit <code>model_ref</code> dependencies. Use LEFT joins. Keep D3 visible when S9 has no service record.</p>
+        <p>In the project ERD, Connection links to Device in the starter product. This conceptual link does not create a join or build dependency.</p>
         <p>The source owners are Operations, Merchant Operations, and Service Operations. Review their keys and columns before you build.</p>
+        <p>Each physical dataset selects <code>connection: source</code> and a qualified table such as <code>source.input_devices</code>. Publication independently selects <code>delivery.execution.connection: destination</code>. Model references use the canonical outputs in the destination.</p>
         <div class="tutorial-actions"><a data-spec="product" data-stage="mapping" class="btn secondary">Open full product</a><button id="tutorialPlan" class="btn secondary">Check build order</button><button id="tutorialDiscover" class="btn secondary">Check source data</button></div>
         <p>Discovery can skip canonical inputs before the first build. Check source data again after the build. The 24-hour freshness promise needs separate operational evidence.</p>
       </section>
@@ -57,7 +64,7 @@
         <p>Build the full product. Expect three connection rows. Key checks prevent duplicates. Reconciliation prevents unapproved row loss. Owner examples check meaning, not only SQL syntax.</p>
         <div class="tutorial-actions"><button data-build="product" class="btn primary">Build full product</button><a data-spec="product" data-stage="assurance" class="btn secondary">Open acceptance evidence</a></div>
         <p>In the editor, select <strong>Acceptance evidence</strong>. Check the real run manifest. A green test does not replace owner approval.</p>
-        <p>The schedule is metadata. CADEO does not start a scheduler. The tutorial uses one SQLite database; it does not ingest remote data.</p>
+        <p>The schedule is metadata. CADEO does not start a scheduler. This tutorial reads a separate local SQLite source database directly and publishes to the destination. Direct cross-database builds currently support local SQLite files only.</p>
       </section>
       <section class="tutorial-step hidden" data-step="4">
         <h2>5. Use the support queue</h2>
@@ -70,11 +77,11 @@
         <h2>6. Test wrong mappings</h2>
         <p>Build the full product first. Each exercise uses a separate contract. The published product must remain unchanged.</p>
         <table><thead><tr><th>Wrong mapping</th><th>Business effect</th><th>First failed gate</th></tr></thead><tbody>
-          <tr><td>Use merchant ID as connection ID</td><td>D1 and D2 have the same key.</td><td>canonical_key_unique</td></tr>
-          <tr><td>Map OFF to active</td><td>D3 leaves the support queue.</td><td>owner_examples</td></tr>
-          <tr><td>Use an INNER service join</td><td>D3 disappears because S9 is absent.</td><td>reconciliation</td></tr>
+          <tr><td>Use customer ID as shipment ID</td><td>Two shipments for C1 get the same key.</td><td>canonical_key_unique</td></tr>
+          <tr><td>Mark refunded payments as paid</td><td>Completed and refunded payments are misclassified.</td><td>owner_examples</td></tr>
+          <tr><td>Use an INNER agent join</td><td>Ticket T2 disappears because agent A9 is absent.</td><td>reconciliation</td></tr>
         </tbody></table>
-        <div class="tutorial-actions"><label for="tutorialCase">Exercise</label><select id="tutorialCase"><option value="wrong-key">Wrong key</option><option value="wrong-status">Wrong status</option><option value="inner-join">INNER service join</option></select><button id="tutorialExercise" class="btn primary">Run wrong mapping</button></div>
+        <div class="tutorial-actions"><label for="tutorialCase">Exercise</label><select id="tutorialCase"><option value="wrong-key">Shipment key</option><option value="wrong-status">Payment status</option><option value="inner-join">Support ticket join</option></select><a id="tutorialOpenCase" data-spec="wrong-key" data-stage="mapping" class="btn secondary">Open exercise</a><button id="tutorialExercise" class="btn primary">Run wrong mapping</button></div>
         <p>The build stops at the first failed check. Later checks can remain not run. Accepted-value checks alone cannot detect a reversed status rule.</p>
         <p>To repair a real error, agree the rule with the owner, fix the mapping, rerun the checks, and keep the new evidence.</p>
         <p>For PostgreSQL, DuckDB, other drivers, CLI commands, and cleanup, open <a href="/tutorial/guide">Full guide &amp; CLI</a>.</p>

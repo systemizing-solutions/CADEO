@@ -9,6 +9,20 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{
 /* Expanded registry entries remain in the editor state when fields are added or stages change. */
 details.group-card>summary{cursor:pointer;font-weight:650;color:#38516b;display:list-item;padding:2px 0 7px}
 details.group-card:not([open])>summary{padding-bottom:2px}
+.destination-settings{border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:22px;min-width:0}
+.destination-settings h3{font-size:14px;margin:0 0 12px}
+.destination-settings .description,#checkRegistryStatus{overflow-wrap:anywhere}
+#checkRegistryStatus summary{cursor:pointer}
+#generatedChecks{min-width:0;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:22px;overflow-wrap:anywhere}
+#generatedChecks h3{font-size:14px;margin:0 0 12px}
+#generatedChecks .generated-check{padding:12px 0;border-top:1px solid var(--border)}
+#generatedChecks h4{font-size:12px;margin:0}
+#generatedChecks .description{margin:8px 0}
+#generatedChecks summary{cursor:pointer}
+#generatedChecks .check-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+#generatedChecks .check-actions select{min-width:0;max-width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;background:#fff;font:inherit}
+#generatedChecks .check-actions .btn{white-space:normal}
+#generatedChecks pre{max-width:100%;overflow-wrap:anywhere}
 .entry-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0 10px}
 .entry-actions input{min-width:0;flex:1;border:1px solid var(--border);border-radius:6px;padding:7px}
 /* v0.8.0: read-only graph, driven by the compiler's lineage and dependency plans. */

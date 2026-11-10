@@ -61,7 +61,7 @@ function tutorialOutput(message, result) {
   tutorialEl('tutorialResult').textContent = JSON.stringify(result, null, 2);
 }
 async function tutorialBuildAction(action, variant = 'product') {
-  if (action === 'build' && !window.confirm('Build and publish into the local tutorial SQLite database?')) {
+  if (action === 'build' && !window.confirm('Read source.sqlite read-only, then build and publish into destination.sqlite?')) {
     tutorialEl('tutorialStatus').textContent = 'Build cancelled. No data changed.';
     return;
   }
@@ -92,8 +92,12 @@ tutorialEl('tutorialDiscover').addEventListener('click', () => tutorialRun(() =>
 tutorialEl('tutorialReport').addEventListener('click', () => tutorialRun(async () => {
   tutorialOutput('Published support queue. Expect D3 at City Pharmacy, service S9.', await tutorialRequest('/api/tutorial', {action: 'report'}));
 }));
+tutorialEl('tutorialCase').addEventListener('change', () => {
+  tutorialEl('tutorialOpenCase').dataset.spec = tutorialEl('tutorialCase').value;
+  tutorialSync();
+});
 tutorialEl('tutorialExercise').addEventListener('click', () => tutorialRun(async () => {
-  if (!window.confirm('Build a wrong mapping in the local tutorial database and check that publication is blocked?')) {
+  if (!window.confirm('Read source.sqlite read-only, run the wrong mapping in destination.sqlite, and check that publication is blocked?')) {
     tutorialEl('tutorialStatus').textContent = 'Exercise cancelled. No data changed.';
     return;
   }

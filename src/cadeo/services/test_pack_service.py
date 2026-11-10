@@ -44,6 +44,8 @@ class TestPackService:
             f"# SQL test pack: {spec.product.name}\n\n"
             "Run each SQL file in a compatible database client, or install SQLAlchemy and the "
             "database driver and run `python run.py --url-env DATABASE_URL`. "
+            "Use `--check CHECK_ID` from this pack's manifest to run one exact check; repeat `--check` to select several. "
+            "Use `--kind unit` or `--kind data` to select a category. "
             "No CADEO installation, YAML, compiler or build is needed.\n\n"
             "Every query must return exactly one row and one numeric `failures` column; "
             "zero passes, a positive count fails. SQL errors and malformed results fail. "

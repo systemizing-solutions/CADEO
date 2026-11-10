@@ -10,6 +10,8 @@ from time import perf_counter
 import os
 from typing import Callable
 
+from sqlalchemy.engine import make_url
+
 from cadeo.brokers.execution_broker import ExecutionBroker
 from cadeo.services.engine_catalog_service import EngineCatalogService
 from cadeo.models.specification import Specification, SpecificationValidationError
@@ -35,10 +37,6 @@ class ExecutionService:
                     f"Product {name}: execution.connection is required for cadeo build")
             registry = {entry.id: entry.url_env for entry in spec.connections}
             env_name = registry[spec.execution.connection]
-            for source in spec.sources:
-                if source.product_ref is None and source.connection != spec.execution.connection:
-                    raise SpecificationValidationError(
-                        f"Product {name}: source {source.id} is not on its execution connection")
             env_names.add(env_name)
         if len(env_names) != 1:
             raise SpecificationValidationError(
@@ -47,7 +45,45 @@ class ExecutionService:
         url = os.environ.get(env)
         if not url:
             raise SpecificationValidationError(f"Missing database URL environment variable: {env}")
+        ExecutionService.source_connections(project_specs, url)
         return env, url
+
+    @staticmethod
+    def source_connections(project_specs: dict[str, Specification], destination: str) -> dict[str, str]:
+        sources: dict[str, str] = {}
+        for name, spec in project_specs.items():
+            if spec.execution is None:
+                raise SpecificationValidationError(f'Product {name}: execution.connection is required for cadeo build')
+            registry = {entry.id: entry.url_env for entry in spec.connections}
+            for source in spec.sources:
+                if source.product_ref is not None or source.connection == spec.execution.connection:
+                    continue
+                if not source.connection or source.connection.lower() in ('main', 'temp'):
+                    raise SpecificationValidationError(f'Product {name}: source {source.id} requires a named source connection')
+                variable = registry[source.connection]
+                url = os.environ.get(variable)
+                if not url:
+                    raise SpecificationValidationError(f'Missing database URL environment variable: {variable}')
+                try:
+                    source_url, destination_url = make_url(url), make_url(destination)
+                except Exception as exc:
+                    raise SpecificationValidationError('Invalid source or destination database URL') from exc
+                if source_url.get_backend_name() != 'sqlite' or destination_url.get_backend_name() != 'sqlite':
+                    raise SpecificationValidationError('Separate source connections currently require SQLite source and destination databases')
+                if (source_url.query or not source_url.database or source_url.database == ':memory:' or
+                        source_url.host or source_url.username or source_url.password or source_url.port):
+                    raise SpecificationValidationError('Separate SQLite sources require a local database file URL')
+                destination_database = destination_url.database
+                if (destination_database and destination_database != ':memory:' and
+                    Path(source_url.database).resolve() == Path(destination_database).resolve()):
+                    raise SpecificationValidationError('Separate source connections must not refer to the destination database file')
+                if len(source.table.split('.')) != 2 or source.table.split('.')[0] != source.connection:
+                    raise SpecificationValidationError(
+                        f'Product {name}: source {source.id} table must be qualified as {source.connection}.<table>')
+                if source.connection.lower() in {key.lower() for key in sources} and sources.get(source.connection) != url:
+                    raise SpecificationValidationError(f'Conflicting source connection ID: {source.connection}')
+                sources[source.connection] = url
+        return sources
 
     def run(self, plan: ProjectPlan, specs: dict[str, Specification], artifact_root: Path,
             run_id: str, dialects: dict[str, str],
@@ -92,6 +128,9 @@ class ExecutionService:
             manifest["connection_env"] = env  # Never save a connection URL or secret.
             parsed_dialect = {name: dialects[name] for name in plan.products}
             with self.broker.transaction(url) as conn:
+                sources = self.source_connections(specs, url)
+                if sources:
+                    self.broker.attach_sources(conn, sources)
                 backend = conn.dialect.name
                 for name, dialect in parsed_dialect.items():
                     expected = EngineCatalogService.expected_output_dialect(backend)

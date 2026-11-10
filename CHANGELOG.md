@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.7 - Distinct tutorial exercises (2026-11-09)
+
+- Separate tutorial source and destination connections and SQLite databases. Read source files through explicitly qualified, read-only attachments while preserving transactional destination publication; other backends still reject cross-connection builds.
+- Give tutorial exercises distinct product IDs, models, source data and targets. Demonstrate duplicate shipment keys, reversed payment status and dropped support tickets without repeating the connection models in the project ERD.
+- Resolve project ERD relationships within their own product and verify failed exercise builds preserve both existing exercise targets and the published support queue.
+- Demonstrate a conceptual Connection-to-Device relationship across the full and starter tutorial products without adding a build dependency.
+- Show compiler-generated checks in the editor with direct links to rule settings, draft SQL previews and acceptance criteria. Support custom-check creation, renaming and removal while keeping acceptance links synchronized.
+- Align the application, bundled schema, examples and generated specifications to v0.8.7; existing pinned schemas remain usable.
+
 ## 0.8.6 - Guided first local run & package rename to CADEO (2026-11-09)
 
 - Use `cadeo` for the distribution, Python package, CLI, schema identifiers and serialized artifact formats. Connection environment variables use the `CADEO_*` prefix.

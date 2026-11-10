@@ -1,4 +1,4 @@
-"""Local v0.8.5 executable acceptance test (SQLAlchemy)."""
+"""Local v0.8.7 executable acceptance test (SQLAlchemy)."""
 from pathlib import Path
 import argparse
 from tempfile import TemporaryDirectory
@@ -76,13 +76,13 @@ def _execute_demo(db, output, products):
     assert all(x == 0 for x in failures), failures
     execute_script(db, artifacts_by_name["device_product.device.publish.sql"].read_text())
     assert db.exec_driver_sql("SELECT COUNT(*) FROM device_product").fetchone()[0] == 3
-    print('PASS: v0.8.5 DAG-ordered staging, checks, publication, reconciliation and preservation')
+    print('PASS: v0.8.7 DAG-ordered staging, checks, publication, reconciliation and preservation')
     print('Output:', rows)
     print('Audit:', audit)
     print('Quality failures:', failures)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run compiled v0.8.5 demo in SQLite')
+    parser = argparse.ArgumentParser(description='Run compiled v0.8.7 demo in SQLite')
     parser.add_argument('--database', type=Path, help='Create a persistent database for cadeo verify')
     args = parser.parse_args()
     run(args.database)

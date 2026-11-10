@@ -37,8 +37,8 @@
             <small>The YAML pins this schema and its version.</small>
           </div>
           <h3 class="workspace-section-heading">Database driver</h3>
-          <p class="workspace-note">Only needed for Build &amp; publish. Validation and SQL preview are offline.</p>
-          <label for="engineChoice">Driver for Build &amp; publish</label><select id="engineChoice"></select><small id="engineInfo"></small>
+          <p class="workspace-note">Only needed to run checks and publish. Validation and SQL compilation are offline.</p>
+          <label for="engineChoice">Driver for database build</label><select id="engineChoice"></select><small id="engineInfo"></small>
           <button id="installEngine" class="btn secondary small" disabled>Install selected driver</button>
           <small id="installStatus" aria-live="polite"></small>
         </section>
@@ -53,7 +53,7 @@
       <main class="editor-pane" aria-label="Specification editor">
         <div class="editor-heading"><div><h2 id="stageTitle">Define</h2><p id="stageDescription">Describe the outcome and requirements</p></div><span id="stageProgress" class="stage-progress">Step 1 of 6</span></div>
         <section id="quickStart" class="quick-start" aria-label="Getting started">
-          <div class="quick-start-copy"><strong id="quickStartTitle">Build your first data product</strong><p id="quickStartText">Work through each stage to describe a product before validating or previewing it.</p><p class="first-run-path"><strong>Minimum path:</strong> Complete fields marked * (required by the schema) across all six stages, add required list entries, and map every output field. Start with the <a href="/tutorial">Tutorial</a> → Create local example → Open starter. A database connection is only needed for Build &amp; publish.</p></div>
+          <div class="quick-start-copy"><strong id="quickStartTitle">Build your first data product</strong><p id="quickStartText">Work through each stage to describe a product before validating or compiling SQL.</p><p class="first-run-path"><strong>Minimum path:</strong> Complete fields marked * (required by the schema) across all six stages, add required list entries, and map every output field. Start with the <a href="/tutorial">Tutorial</a> → Create local example → Open starter. A database connection is only needed to run checks and publish.</p></div>
           <div id="quickStartSaveRow" class="quick-start-save hidden"><label for="quickStartPath">Save specification as</label><input id="quickStartPath" spellcheck="false" placeholder="my_product.yaml"></div>
           <div class="quick-start-actions"><button id="quickStartAction" class="btn primary small">Continue to Model</button><button id="dismissQuickStart" class="icon-button" aria-label="Hide getting started guidance" title="Hide">×</button></div>
         </section>
@@ -79,7 +79,7 @@
             <div class="sql-picker"><label for="sqlArtifactSelect">Generated SQL artifact</label><select id="sqlArtifactSelect" aria-label="Choose SQL artifact"></select></div>
             <div class="sql-actions"><span id="sqlDialect" class="sql-dialect">—</span><button id="copySql" class="btn secondary small">Copy SQL</button></div>
           </div>
-          <div id="sqlPreviewState" class="sql-preview-state" role="status">Compile a specification to preview its generated SQL.</div>
+          <div id="sqlPreviewState" class="sql-preview-state" role="status">Compile SQL (offline) to generate SQL artifacts for inspection. This does not execute SQL or run checks.</div>
           <div id="sqlArtifactMeta" class="sql-artifact-meta"></div>
           <div class="sql-file-row"><label>Generated file path</label><code id="sqlFilePath">—</code><button id="copySqlPath" class="btn secondary small">Copy path</button></div>
           <div class="sql-code-view" aria-label="Generated SQL source"><pre id="sqlLineNumbers" aria-hidden="true"></pre><pre id="sqlCode" tabindex="0"></pre></div>
@@ -123,8 +123,9 @@
         <div class="divider"></div>
         <div class="panel-title">Actions</div>
         <div id="contextActions" class="context-actions"></div>
-        <div class="action-field"><label for="actionScope">Validation scope</label><select id="actionScope"><option value="file">Current specification (draft)</option><option value="project">Entire project (saved YAML)</option></select></div>
-        <div class="action-field"><label for="testPackExport">Compile test-pack export</label><select id="testPackExport"><option value="none">None</option><option value="sql">SQL</option></select></div>
+        <p id="actionHelp" class="panel-desc" aria-live="polite">Validate checks the specification structure and rules; it does not execute SQL.</p>
+        <div class="action-field"><label for="actionScope">Operation scope</label><select id="actionScope"><option value="file">Current specification (draft)</option><option value="project">Entire project (saved YAML)</option></select></div>
+        <div class="action-field"><label for="testPackExport">Export standalone SQL checks</label><select id="testPackExport"><option value="none">None</option><option value="sql">SQL test pack</option></select><small>Use the generated runner with --check CHECK_ID from that pack's manifest to run one check without publishing.</small></div>
         <input id="actionSelect" type="hidden" value="validate">
         <button id="runAction" class="btn secondary hidden">Run action</button>
         <details id="advancedActions" class="advanced-actions"><summary>Execution options</summary>

@@ -57,6 +57,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
     app = Flask(__name__)
     app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
     app.config['JSON_SORT_KEYS'] = False
+    app.json.sort_keys = False
     # Not a network service. No auth or external origins are supported.
     app.config['TRUSTED_HOSTS'] = ['localhost', '127.0.0.1', '[::1]']
 
@@ -129,9 +130,11 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     from cadeo.services.tutorial_service import TutorialService
     tutorial = TutorialService()
-    tutorial_root = inside(root if (root / 'tutorial.sqlite').is_file() else root / 'tutorial')
-    if (tutorial_root / 'tutorial.sqlite').is_file():
-        inside(tutorial_root / 'tutorial.sqlite')
+    tutorial_root = inside(root if any((root / name).is_file() for name in
+                           ('source.sqlite', 'destination.sqlite', 'tutorial.sqlite')) else root / 'tutorial')
+    if all((tutorial_root / name).is_file() for name in ('source.sqlite', 'destination.sqlite')):
+        inside(tutorial_root / 'source.sqlite')
+        inside(tutorial_root / 'destination.sqlite')
         tutorial.activate(tutorial_root)
 
     @app.after_request
@@ -203,7 +206,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
 
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.5')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.8.7')
 
     @app.get('/tutorial')
     def tutorial_page():
@@ -546,7 +549,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
                for item in document.get('sources', {}).get('datasets', {}).values()):
             preflight_schema_refs(root)
             catalog = {name: spec for name, _, spec in projects.load(root).products
-                       if name != document.get('definition', {}).get('name')}
+                              if name != document.get('definition', {}).get('name')}
         findings = specifications.findings(document, catalog)
         if findings:
             return jsonify(error='Validate the specification before viewing its graph',
@@ -612,8 +615,8 @@ def create_app(workspace: Path, *, overwrite: bool = False):
             model_id = model.product.name[len(spec.name)+1:]
             types = {test.id: test.type for test in model.tests}
             checks.extend({'id': model_id + '/' + check_id,
-                           'type': types.get(check_id,'generated'), 'model': model_id}
-                          for check_id, _ in SqlTemplateService().check_statements(model))
+                           'type': types.get(check_id,'generated'), 'model': model_id, 'sql': sql}
+                          for check_id, sql in SqlTemplateService().check_statements(model))
         return jsonify(product=spec.name, checks=checks,
                        unknown_references=sorted(current_ids - {item['id'] for item in checks}))
 
@@ -639,7 +642,7 @@ def create_app(workspace: Path, *, overwrite: bool = False):
                for item in document.get('sources', {}).get('datasets', {}).values()):
             preflight_schema_refs(root)
             catalog = {name: spec for name, _, spec in projects.load(root).products
-                       if name != document.get('definition', {}).get('name')}
+                              if name != document.get('definition', {}).get('name')}
         findings = specifications.findings(document, catalog)
         if findings:
             return jsonify(error='Validate the specification before viewing evidence',
@@ -653,10 +656,13 @@ def create_app(workspace: Path, *, overwrite: bool = False):
             if manifest_path.suffix.lower() != '.json':
                 raise WorkspaceError('Run manifest must be a JSON file')
         else:
-            # Discover the latest run in the two conventional build directories.
+            # Search the product and containing project, not unrelated workspace builds.
             # Explicit paths remain available for custom --report or --out runs.
             candidates = []
-            for build_root in {inside(root / 'build'), inside(path.parent / 'build')}:
+            build_roots = {inside(path.parent / 'build')}
+            if path.parent != root:
+                build_roots.add(inside(path.parent.parent / 'build'))
+            for build_root in build_roots:
                 if build_root.is_dir():
                     candidates.extend(build_root.glob('*/run-manifest.json'))
             for candidate in sorted(set(candidates), key=lambda p: p.stat().st_mtime, reverse=True)[:100]:

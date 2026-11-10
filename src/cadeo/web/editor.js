@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.5.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.8.7.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -143,6 +143,7 @@ function scheduleCheckRegistry(delay = 300) {
   state.checkRegistryStatus = shouldLoad ? 'loading' : 'unavailable';
   state.checkRegistryError = state.rawChanged ? 'Apply YAML edits to refresh generated checks' : '';
   refreshCheckSelectors();
+  renderCheckRegistryStatus();
   if (!shouldLoad) return;
   const documentSnapshot = clone(state.document);
   const schemaSnapshot = state.schemaId;
@@ -161,10 +162,145 @@ function scheduleCheckRegistry(delay = 300) {
       state.checkRegistryStatus = 'unavailable';
       const detail = error.issues?.map(issue => `${issue.path}: ${issue.message}`).join('; ');
       state.checkRegistryError = detail ? `${error.message}: ${detail}` : error.message;
-      status(`Check selection unavailable for ${pathSnapshot}: ${state.checkRegistryError}`, 'error');
     }
     refreshCheckSelectors();
+    renderCheckRegistryStatus();
   }, delay);
+}
+
+function renderCheckRegistryStatus() {
+  renderGeneratedChecks();
+  let host = el('checkRegistryStatus');
+  if (!host) {
+    host = create('div'); host.id = 'checkRegistryStatus';
+    el('status').before(host);
+  }
+  host.replaceChildren();
+  if (!state.checkRegistryError || state.rawChanged) return;
+  const details = create('details', 'status muted');
+  details.append(create('summary', '', 'Generated checks unavailable for this draft'));
+  details.append(create('p', '', 'Check generation is pending. You can still save this draft and edit any stage.'));
+  details.append(create('p', '', state.checkRegistryError));
+  details.append(button('Review mappings', () => navigateStage('mapping')),
+    button('Review sources', () => navigateStage('sources')));
+  host.append(details);
+}
+
+function renderGeneratedChecks() {
+  const host = el('generatedChecks');
+  if (!host) return;
+  host.replaceChildren(create('h3', '', 'Generated checks'));
+  const modelId = activeModelId();
+  const key = state.document.model?.entities?.[modelId]?.unique_key_attributes || [];
+  host.append(create('p', 'description', `Unique key: ${key.join(', ') || 'Not declared'}`));
+  host.append(create('p', 'description', 'Build runs all planned checks as quality gates before publication. To run one check without publishing, export a SQL test pack and run its runner from the pack folder with --check <check-id-from-manifest>.'));
+  const management = create('div', 'check-actions');
+  management.append(button('Manage custom checks', () => openCheckSetting(['assurance','entities',modelId,'tests']), 'btn secondary small'));
+  host.append(management);
+  if (state.checkRegistryStatus !== 'ready') {
+    host.append(create('p', 'description', state.checkRegistryStatus === 'loading' ?
+      'Loading generated checks...' : 'Checks pending until this draft can be compiled.'));
+    return;
+  }
+  for (const check of state.checkRegistry.filter(item => item.model === modelId)) {
+    const row = create('article', 'generated-check');
+    const identity = create('h4');
+    identity.append(create('code', '', check.id));
+    const rule = check.id === `${modelId}/canonical_key_unique` ?
+      `No duplicate groups for ${key.join(', ')}. Expected failures: 0.` : check.type;
+    row.append(identity, create('p', 'description', rule));
+    const checkId = check.id.slice(modelId.length + 1);
+    const custom = Object.hasOwn(state.document.assurance?.entities?.[modelId]?.tests || {}, checkId);
+    const setting = custom ? ['assurance','entities',modelId,'tests',checkId] :
+      checkId === 'canonical_key_unique' ? ['model','entities',modelId,'unique_key_attributes'] :
+      checkId.startsWith('not_null:') ? ['model','entities',modelId,'attributes',checkId.slice(9),'nullable'] :
+      checkId.startsWith('snapshot:') ? ['assurance','entities',modelId,'preservation'] :
+      checkId === 'reconciliation' ? ['assurance','entities',modelId,'reconciliation'] :
+      checkId.startsWith('join_unique:') ? ['mapping','entities',modelId,'joins'] :
+      ['mapping','entities',modelId];
+    const actions = create('div', 'check-actions');
+    actions.append(button(custom ? 'Edit custom check' : 'Edit rule settings', () => openCheckSetting(setting), 'btn secondary small'));
+    if (checkId === 'canonical_key_unique' || checkId === 'reconciliation')
+      actions.append(button('Edit mapping', () => openCheckSetting(['mapping','entities',modelId,'fields']), 'btn secondary small'));
+    actions.append(button('View latest run result', () => openEvidence(), 'btn secondary small'));
+    row.append(actions);
+    renderCheckAcceptance(row, check.id);
+    if (check.sql) {
+      const details = create('details', 'artifact-preview');
+      details.append(create('summary', '', 'SQL (draft, not run)'), create('pre', '', check.sql));
+      row.append(details);
+    }
+    host.append(row);
+  }
+}
+
+function acceptanceCriteria() {
+  return (state.document.definition?.features || []).flatMap((feature, featureIndex) =>
+    (feature.acceptance_criteria || []).map((criterion, criterionIndex) => ({
+      criterion, label: `${feature.id} / ${criterion.id}`,
+      path: ['definition','features',featureIndex,'acceptance_criteria',criterionIndex,'check_ids']
+    })));
+}
+
+function renderCheckAcceptance(row, checkId) {
+  const criteria = acceptanceCriteria();
+  const links = create('div', 'check-acceptance');
+  for (const item of criteria.filter(item => (item.criterion.check_ids || []).includes(checkId))) {
+    const linked = create('div', 'check-actions');
+    linked.append(create('span', 'description', item.label), button('Unlink', () => {
+      writePath(item.path, item.criterion.check_ids.filter(id => id !== checkId));
+      renderGeneratedChecks();
+    }, 'btn secondary small'));
+    links.append(linked);
+  }
+  const available = criteria.filter(item => !(item.criterion.check_ids || []).includes(checkId));
+  if (available.length) {
+    const actions = create('div', 'check-actions');
+    const select = create('select');
+    select.setAttribute('aria-label', `Acceptance criterion for ${checkId}`);
+    const placeholder = create('option', '', 'Select acceptance criterion'); placeholder.value = '';
+    select.append(placeholder);
+    available.forEach((item, index) => {
+      const option = create('option', '', item.label); option.value = String(index); select.append(option);
+    });
+    const link = button('Link criterion', () => {
+      if (select.value === '') return;
+      const item = available[Number(select.value)];
+      writePath(item.path, [...(item.criterion.check_ids || []), checkId]);
+      renderGeneratedChecks();
+    }, 'btn secondary small');
+    link.disabled = true;
+    select.addEventListener('change', () => { link.disabled = select.value === ''; });
+    actions.append(select, link); links.append(actions);
+  }
+  links.append(button('Edit acceptance criteria', () => openCheckSetting(['definition','features']), 'text-button'));
+  row.append(links);
+}
+
+function updateCheckReferences(modelId, oldId, newId) {
+  const previous = `${modelId}/${oldId}`;
+  for (const {criterion} of acceptanceCriteria()) {
+    if (!Array.isArray(criterion.check_ids)) continue;
+    criterion.check_ids = [...new Set(criterion.check_ids.flatMap(id =>
+      id !== previous ? [id] : newId ? [`${modelId}/${newId}`] : []))];
+  }
+}
+
+async function openCheckSetting(path) {
+  const modelIndex = path.indexOf('entities');
+  if (modelIndex >= 0) state.activeModel = path[modelIndex + 1];
+  await navigateStage(path[0]);
+  const target = [...el('formPanel').querySelectorAll('[data-path]')]
+    .find(node => node.dataset.path === path.join('.') || node.dataset.path === pathId(path));
+  if (!target) return;
+  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+    if (parent.tagName === 'DETAILS') parent.open = true;
+  }
+  target.querySelectorAll('details').forEach(details => { details.open = true; });
+  target.scrollIntoView({block: 'center'});
+  const control = path.at(-1) === 'tests' ? target.querySelector('[aria-label="New check ID"]') :
+    target.matches('input,select,textarea,button') ? target : target.querySelector('input,select,textarea,button');
+  control?.focus({preventScroll: true});
 }
 
 function status(message, kind = 'muted', result = null) {
@@ -214,7 +350,12 @@ function writePath(path, value, refresh = false) {
   if (refresh) drawForm();
 }
 function removePath(path) {
-  if (!window.confirm(`Remove ${path.join('.')}? This will delete its value from the unsaved specification.`)) return;
+  const customCheck = path[0] === 'assurance' && path[3] === 'tests' && path.length <= 5;
+  if (!window.confirm(`Remove ${path.join('.')}? This will delete its value from the unsaved specification.${customCheck ? ' Its acceptance links will also be removed.' : ''}`)) return;
+  if (customCheck) {
+    const ids = path.length === 5 ? [path[4]] : Object.keys(readPath(path) || {});
+    ids.forEach(id => updateCheckReferences(path[2], id, null));
+  }
   const parent = readPath(path.slice(0, -1));
   if (Array.isArray(parent)) parent.splice(path.at(-1), 1);
   else delete parent[path.at(-1)];
@@ -381,7 +522,11 @@ function renderValue(schema, value, path, depth = 0) {
       references.forEach(item => { const option=create('option','',item); option.value=item; select.append(option); });
       select.value = current;
     }
-    select.addEventListener('change', () => writePath(path, select.value));
+    select.addEventListener('change', () => {
+      const mappingSource = path[0] === 'mapping' && path.at(-1) === 'source';
+      writePath(path, select.value, true);
+      if (mappingSource) status(`Source changed to ${select.value || '(none)'}. Field expressions and joins are unchanged; validate the updated mapping.`);
+    });
     return select;
   }
   if (s.const !== undefined) {
@@ -438,18 +583,22 @@ function renderValue(schema, value, path, depth = 0) {
     const obj = isObject(value) ? value : {};
     const properties = s.properties || {};
     const optionalSettings = [];
+    const showProperties = s['x-editor-expanded'] === true;
     for (const [key, property] of Object.entries(properties)) {
       const required = (s.required || []).includes(key);
-      if (!required && obj[key] === undefined) {
+      const expanded = showProperties || resolved(property)['x-editor-expanded'] === true;
+      const hasDefault = resolved(property).default !== undefined;
+      const expandedValue = expanded && obj[key] === undefined && hasDefault ? defaultFor(property) : obj[key];
+      if (!required && obj[key] === undefined && !expanded) {
         const add = create('div', 'add-row');
         add.append(button(`+ ${titleCase(key)}`, () => writePath([...path, key], defaultFor(property), true)));
         const desc = resolved(property).description;
         if (desc) add.append(create('span', 'description', desc.slice(0, 80)));
-        if (required) container.append(add);
+        if (required || primaryConnectionSetting(path, key)) container.append(add);
         else optionalSettings.push(add);
       } else {
-        const field = labeledField(property, obj[key], [...path, key], key, required, depth + 1);
-        if (required) container.append(field);
+        const field = labeledField(property, expandedValue, [...path, key], key, required, depth + 1);
+        if (required || primaryConnectionSetting(path, key) || expanded) container.append(field);
         else optionalSettings.push(field);
       }
     }
@@ -476,11 +625,24 @@ function renderValue(schema, value, path, depth = 0) {
       const extra = s.additionalProperties === true ? {} : s.additionalProperties;
       for (const key of Object.keys(obj).filter(k => !Object.hasOwn(properties, k))) {
         const card = collapsible([...path,key],key); const heading = create('div', 'entry-actions');
+        card.dataset.path = [...path,key].join('.');
         const newInput = create('input'); newInput.type = 'text'; newInput.value = key;
+        const customCheck = path[0] === 'assurance' && path.at(-1) === 'tests';
+        if (customCheck) newInput.setAttribute('aria-label', `Check ID ${key}`);
         newInput.addEventListener('change', () => {
           const proposed = newInput.value.trim();
           if (proposed && proposed !== key && !Object.hasOwn(obj, proposed)) {
+            if (customCheck) {
+              const pattern = resolved(s.propertyNames).pattern;
+              const generated = state.checkRegistry.some(check => check.id === `${path[2]}/${proposed}` && check.type === 'generated');
+              if (pattern && !new RegExp(pattern).test(proposed) || generated) {
+                newInput.value = key; status('Enter a unique, valid custom check ID.', 'error'); return;
+              }
+              updateCheckReferences(path[2], key, proposed);
+            }
             obj[proposed] = obj[key]; delete obj[key]; markDirty(); drawForm();
+          } else if (customCheck && proposed !== key) {
+            newInput.value = key; status('Enter a unique, valid custom check ID.', 'error');
           }
         });
         heading.append(newInput, button('Remove', () => removePath([...path, key]), 'text-button danger'));
@@ -495,11 +657,18 @@ function renderValue(schema, value, path, depth = 0) {
         attributeIds(path).filter(name => !Object.hasOwn(obj,name)).forEach(name => {
           const opt = create('option', '', name); opt.value = name; input.append(opt);
         });
-      } else input.placeholder = 'New key name';
-      input.setAttribute('aria-label', 'New entry key');
-      add.append(input, button('+ Add entry', () => {
+      } else input.placeholder = path[0] === 'assurance' && path.at(-1) === 'tests' ? 'New check ID' : 'New key name';
+      const customChecks = path[0] === 'assurance' && path.at(-1) === 'tests';
+      input.setAttribute('aria-label', customChecks ? 'New check ID' : 'New entry key');
+      add.append(input, button(customChecks ? 'Add custom check' : '+ Add entry', () => {
         const key = input.value.trim();
         if (!key || Object.hasOwn(obj, key) || Object.hasOwn(properties, key)) { status('Enter a unique key name.', 'error'); return; }
+        if (customChecks) {
+          const pattern = resolved(s.propertyNames).pattern;
+          if (pattern && !new RegExp(pattern).test(key) || state.checkRegistry.some(check => check.id === `${path[2]}/${key}`)) {
+            status('Enter a unique, valid custom check ID.', 'error'); return;
+          }
+        }
         writePath([...path, key], defaultFor(extra), true);
       })); container.append(add);
     }
@@ -552,6 +721,29 @@ function collapsible(path, title) {
   return details;
 }
 function stageSchema() { return resolved(state.schema)?.properties?.[state.activeStage] || {}; }
+function primaryConnectionSetting(path, key) {
+  return path[0] === 'sources' && (key === 'connections' || key === 'connection') ||
+    path[0] === 'delivery' && key === 'execution';
+}
+function renderDestination(root, modelId) {
+  const deliverySchema = resolved(state.schema?.properties?.delivery);
+  if (!deliverySchema.properties?.execution) return;
+  const section = create('section', 'destination-settings');
+  section.append(create('h3', '', 'Destination'));
+  section.append(labeledField({ ...resolved(deliverySchema.properties.execution),
+    title: 'Destination database', description: 'Shared by all publication targets in this product.' },
+    state.document.delivery?.execution, ['delivery', 'execution'], 'execution', false, 0));
+  const connectionId = state.document.delivery?.execution?.connection;
+  const environment = state.document.sources?.connections?.[connectionId]?.url_env;
+  if (environment) section.append(create('p', 'description', `Database URL environment variable: ${environment}`));
+  if (modelId && deliverySchema.properties.targets) {
+    const targetSchema = resolved(deliverySchema.properties.targets).additionalProperties;
+    section.append(labeledField(targetSchema, state.document.delivery?.targets?.[modelId],
+      ['delivery', 'targets', modelId], `${modelId} publication target`, true, 0));
+  }
+  section.append(button('Publication settings', () => navigateStage('delivery')));
+  root.append(section);
+}
 function addModel() {
   const id = (window.prompt('New model ID (letters, numbers and underscores)', '') || '').trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id) || modelIds().includes(id)) {
@@ -611,13 +803,28 @@ function drawForm() {
   renderModelSelector();
   const modelId = activeModelId();
   const stage = state.activeStage;
+  if (modelId && ['mapping','assurance'].includes(stage)) {
+    const checks = create('section'); checks.id = 'generatedChecks';
+    root.append(checks);
+    renderGeneratedChecks();
+  }
+  if (stage === 'model' || stage === 'sources') renderDestination(root, stage === 'model' ? modelId : null);
   if (modelId && ['model','mapping','assurance'].includes(stage)) {
     if (stage === 'assurance') {
       root.append(labeledField(property.properties.quality,
         state.document.assurance?.quality, ['assurance','quality'], 'quality', true, 0));
     }
     const itemSchema = resolved(property.properties.entities).additionalProperties;
-    root.append(labeledField(itemSchema,
+    if (stage === 'assurance') {
+      const settings = resolved(itemSchema);
+      const value = state.document.assurance?.entities?.[modelId] || {};
+      const tests = settings.properties.tests;
+      if (tests) root.append(labeledField({...resolved(tests), title: 'Custom checks'},
+        value.tests || {}, ['assurance','entities',modelId,'tests'], 'tests', false, 0));
+      for (const [name, schema] of Object.entries(settings.properties).filter(([name]) => name !== 'tests'))
+        root.append(labeledField(schema, value[name], ['assurance','entities',modelId,name], name,
+          (settings.required || []).includes(name), 0));
+    } else root.append(labeledField(itemSchema,
       state.document?.[stage]?.entities?.[modelId], [stage,'entities',modelId], modelId, true, 0));
   } else if (modelId && stage === 'delivery') {
     const targetSchema = resolved(property.properties.targets).additionalProperties;
@@ -712,13 +919,11 @@ function renderQuickStart() {
   const hasPreview=state.sqlArtifacts.length>0 && !state.sqlStale;
   el('quickStartTitle').textContent=`Step ${index+1} of ${STAGES.length}: ${guide.title}`;
   el('quickStartText').textContent=guide.text;
-  if(finalStage && !el('filePath').value.trim()) {
-    const slug=String(state.document?.definition?.name || 'new_product').toLowerCase().replace(/[^a-z0-9_-]+/g,'_');
-    el('filePath').value=`${slug || 'new_product'}.yaml`;
-  }
   const saveRow=el('quickStartSaveRow');
   const needsSave=finalStage && validated && !hasPreview && (!state.path || state.dirty);
-  saveRow.classList.toggle('hidden',!needsSave);
+  saveRow.classList.toggle('hidden',!!state.path && !needsSave);
+  const slug=String(state.document?.definition?.name || 'new_product').toLowerCase().replace(/[^a-z0-9_-]+/g,'_');
+  el('quickStartPath').placeholder=`${slug || 'new_product'}.yaml`;
   if(document.activeElement!==el('quickStartPath'))el('quickStartPath').value=el('filePath').value;
   const action=el('quickStartAction');
   if(hasPreview) {
@@ -734,10 +939,10 @@ function renderQuickStart() {
       el('quickStartText').textContent=`Validation found ${state.validation.issues?.length || 0} issue(s). Use the findings in the right panel to jump to fields, then validate again.`;
   } else if(state.path && !state.dirty) {
     action.dataset.action='preview';
-    action.textContent='Preview SQL';
+    action.textContent='Compile & preview SQL';
   } else {
     action.dataset.action='save-preview';
-    action.textContent='Save & preview SQL';
+    action.textContent='Save & compile SQL';
   }
 }
 async function handleQuickStartAction() {
@@ -773,12 +978,21 @@ function renderContextActions() {
     [['validate','Validate']],
     [['erd','View canonical ERD'],['validate','Validate'],['trace','Lineage']],
     [['discover','Discover sources'],['validate','Validate']],
-    [['compile','Preview SQL'],['trace','Lineage']],
+    [['compile','Compile SQL (offline)'],['trace','Lineage']],
     [['evidence','Review evidence'],['checks','Review checks'],['validate','Validate']],
-    [['evidence','Review evidence'],['compile','Compile'],['plan','Review build'],['build','Build & publish']],
+    [['evidence','Review evidence'],['compile','Compile SQL (offline)'],['plan','Review execution plan'],['build','Build, run checks & publish']],
   ][STAGES.indexOf(state.activeStage)] || [];
   const container=el('contextActions');container.replaceChildren();
   actions.forEach(([id,label])=>container.append(button(label,()=> id==='evidence' ? openEvidence() : id==='trace' ? openVisualGraph('lineage') : id==='erd' ? openVisualGraph('erd') : id==='plan' ? openVisualGraph('dependencies') : runAction(id),id==='build'?'btn primary':'btn secondary')));
+  const help={
+    definition:'Validate checks the specification structure and rules; it does not execute SQL.',
+    model:'Review the canonical model, then validate the specification.',
+    sources:'Discover reads configured sources. Validation checks the specification without connecting to a database.',
+    mapping:'Generated checks are evaluated during a build. Review evidence to see results from the latest run.',
+    assurance:'Review evidence shows results from a build; viewing it does not execute checks.',
+    delivery:'Compile SQL (offline) generates and syntax-checks SQL for inspection; it does not execute SQL or connect to a database. Build, run checks & publish executes the plan using the configured database connection; failed quality gates block publication. To run one check without publishing, export an SQL test pack and run its runner with --check <check-id-from-manifest>.'
+  };
+  el('actionHelp').textContent=help[state.activeStage]||'';
 }
 async function navigateStage(stage) {
   if (!STAGES.includes(stage))return;
@@ -824,7 +1038,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.5.schema.json' ? 'Bundled product schema (v0.8.5)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.8.7.schema.json' ? 'Bundled product schema (v0.8.7)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -929,7 +1143,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.5',
+    spec_version: state.schema?.['x-schema-version'] || '0.8.7',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -966,13 +1180,14 @@ async function newFile() {
     scheduleCheckRegistry(0);
     el('filePath').value = ''; syncSchemaReference(); markDirty(); updateDocumentTitle(); await showForm();
     setWorkspaceSidebar(false);
-    status('New specification created. Start with Define and continue through each stage.', 'muted', '');
+    status('New draft created. Save at any stage.', 'muted', '');
   } catch (error) { status(error.message, 'error'); }
 }
 async function saveFile() {
   if (state.rawChanged) await applyYaml();
-  const path = el('filePath').value.trim();
-  if (!path) throw new Error('Enter a workspace-relative YAML path before saving.');
+  const slug = String(state.document?.definition?.name || 'new_product').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  const path = el('filePath').value.trim() || `${slug || 'new_product'}.yaml`;
+  el('filePath').value = path;
   // If the path changes, the existing ETag must not authorize overwriting another file.
   let etag = path === state.path ? state.etag : null;
   if (path !== state.path && state.files.includes(path)) {
@@ -1025,6 +1240,17 @@ async function validateDraft() {
   status(`${scope==='project'?'Project':'Specification'} validation ${result.valid?'passed':'failed'}. ${issues.length} finding(s).`,result.valid?'success':'error',result);
   return result;
 }
+function actionOutcomeMessage(action,result,passed) {
+  if (action==='build' && !passed) {
+    const manifest=result.manifest||{};
+    const failedStep=manifest.steps?.find(step=>step.status==='failed');
+    const reason=manifest.error||failedStep?.error||'Execution reported a failure';
+    const runDetails=result.manifest_path?` Run details: ${result.manifest_path}.`:'';
+    return `Build failed: ${reason}.${runDetails}`;
+  }
+  const actionName=action==='compile'?'SQL compilation':action==='build'?'Build, checks & publication':titleCase(action);
+  return `${actionName} ${passed?'completed':'reported failures'}.`;
+}
 async function runAction(explicitAction) {
   const action=explicitAction || el('actionSelect').value;
   const control=el('runAction');
@@ -1066,11 +1292,11 @@ async function runAction(explicitAction) {
     const result=await request('/api/action','POST',requestBody);
     if (state.currentRun !== currentRun)return;
     const passed=result.passed!==false && result.valid!==false && result.status!=='failed';
-    status(`${titleCase(action)} ${passed?'completed':'reported failures'}.`,passed?'success':'error', action==='compile'?null:result);
+    status(actionOutcomeMessage(action,result,passed),passed?'success':'error', action==='compile'?null:result);
     if (action==='compile' && result.generated){
       await showSqlPreview(result.artifacts||[],result.generated);
       if (result.test_packs?.length)
-        status(`Compile completed. SQL test packs: ${result.test_packs.join(', ')}`, 'success');
+        status(`SQL compilation completed. SQL test packs: ${result.test_packs.join(', ')}`, 'success');
       if (state.revision!==revisionAtRequest){state.sqlStale=true;updateSqlState();}
     }
     if (action==='trace') showEngineeringResult(result);
@@ -1101,7 +1327,8 @@ function updateEvidenceState() {
     evidence.evidence_status==='stale'?'Selected run does not match the current specification; results are not treated as passed.':
     `Run ${evidence.run_id}: ${evidence.evidence_status}. ${evidence.summary.failed} failed check(s), ${evidence.summary.not_run} not run.`;
 }
-const evidenceBadge=(value)=>create('span',`evidence-badge ${value||'not_run'}`,value||'not_run');
+const evidenceBadge=(value)=>create('span',`evidence-badge ${value||'not_run'}`,
+  (value||'not_run').replaceAll('_',' ').replace(/\b\w/g,letter=>letter.toUpperCase()));
 function drawEvidence(evidence){
   state.evidence=evidence;state.evidenceStale=false;
   if(evidence.manifest_path)el('evidenceManifestPath').value=evidence.manifest_path;
@@ -1187,10 +1414,10 @@ function updateSqlState() {
     banner.textContent='Stale preview — the specification has changed. Compile again to refresh the SQL.';
     banner.className='sql-preview-state stale';
   } else if (state.sqlArtifacts.length) {
-    banner.textContent=`${state.sqlArtifacts.length} generated SQL artifact(s). SQLGlot translated and SQLFluff checked executable statements during compilation; this does not prove database execution.`;
+    banner.textContent=`${state.sqlArtifacts.length} generated SQL artifact(s). SQLGlot translated and SQLFluff checked executable statements; nothing has run against a database. Use Build, run checks & publish to execute the selected plan, or export a test pack to run one check.`;
     banner.className='sql-preview-state success';
   } else {
-    banner.textContent='Compile a specification to preview its SQL artifacts and output file paths.';
+    banner.textContent='Choose Compile SQL (offline) to generate SQL artifacts for inspection. This does not execute SQL or run checks.';
     banner.className='sql-preview-state';
   }
 }
@@ -1570,7 +1797,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.5.schema.json', false);
+    await activateSchema('schemas/product-v0.8.7.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

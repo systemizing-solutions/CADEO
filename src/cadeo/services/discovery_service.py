@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 import os
 
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
+
 from cadeo.brokers.database_broker import DatabaseBrokerContract, DatabaseInspectionError, LiveTable
 from cadeo.models.specification import Source, Specification
 
@@ -60,7 +63,12 @@ class DiscoveryService:
         if not url:
             return self._failed(source, f"Environment variable {variable} is not set")
         try:
-            actual = self.broker.inspect_table(url, source.table, source.columns, source.key, profile)
+            table = source.table
+            if make_url(url).get_backend_name() == 'sqlite' and table.startswith(source.connection + '.'):
+                table = table.split('.', 1)[1]
+            actual = self.broker.inspect_table(url, table, source.columns, source.key, profile)
+        except (ValueError, ArgumentError):
+            return self._failed(source, 'Invalid SQLAlchemy source connection URL')
         except DatabaseInspectionError as error:
             return self._failed(source, str(error))
         return self._compare(source, actual, profile)

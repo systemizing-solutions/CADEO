@@ -7,6 +7,7 @@ that a warehouse supports rollback of view changes.
 
 from contextlib import contextmanager
 from pathlib import Path
+import re
 from secrets import token_hex
 from typing import Iterator
 
@@ -35,7 +36,7 @@ class ExecutionBroker:
         engine = None
         try:
             try:
-                engine = create_engine(url)
+                engine = create_engine(url, connect_args={'uri': True} if backend == 'sqlite' else {})
             except Exception as exc:
                 # Do not echo credential-bearing DBAPI exception messages.
                 raise SpecificationValidationError(
@@ -60,6 +61,27 @@ class ExecutionBroker:
         finally:
             if engine is not None:
                 engine.dispose()
+
+    @staticmethod
+    def attach_sources(connection: Connection, sources: dict[str, str]) -> None:
+        for name, url in sources.items():
+            if connection.dialect.name != 'sqlite':
+                raise SpecificationValidationError('Separate source connections currently require SQLite')
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) or name.lower() in ('main', 'temp'):
+                raise SpecificationValidationError('Invalid SQLite source connection ID')
+            try:
+                parsed = make_url(url)
+            except Exception as exc:
+                raise SpecificationValidationError('Invalid source database URL') from exc
+            if (parsed.get_backend_name() != 'sqlite' or parsed.query or not parsed.database or
+                    parsed.host or parsed.username or parsed.password or parsed.port):
+                raise SpecificationValidationError('Separate SQLite sources require a local database file URL')
+            database = Path(parsed.database).resolve()
+            if not database.is_file():
+                raise SpecificationValidationError(f'Source connection {name}: SQLite database does not exist')
+            quoted = connection.dialect.identifier_preparer.quote(name)
+            connection.exec_driver_sql(f'ATTACH DATABASE ? AS {quoted}',
+                                       (database.as_uri() + '?mode=ro',))
 
     @staticmethod
     def _duckdb_publication_probe(engine) -> None:

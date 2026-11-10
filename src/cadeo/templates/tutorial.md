@@ -3,6 +3,13 @@
 Allow 15 minutes. Use local sample data only. You need Python 3.10 or later.
 SQLite needs no extra driver. Do not use a production database for this exercise.
 
+In the editor, **Save** persists unfinished drafts at any stage. A new draft
+shows **Save specification as**; enter a workspace-relative YAML path or use
+the filename suggested from the product name. You can save Define before
+adding sources or mappings, reopen the draft, and move between stages freely.
+**Validate**, SQL generation, and builds still require a complete contract;
+pending generated checks do not prevent saving.
+
 ## 1. Start with one source and one output
 
 Install CADEO from the repository: `python -m pip install -e .`.
@@ -10,8 +17,41 @@ For an installed release, use `python -m pip install cadeo`.
 Run `cadeo tutorial init`. This creates a `tutorial` folder or completes an
 existing partial setup. Existing contracts, notes, source tables and data are
 preserved; only missing resources are created. Running setup again is safe.
-Run the printed `export` command in your terminal.
-It sets the SQLite connection for the normal CLI commands below.
+Run the printed `export` commands in your terminal.
+They set separate source and destination SQLite connections for the CLI commands below.
+
+| Role | Connection ID | Database file | URL environment variable |
+| --- | --- | --- | --- |
+| Read input tables | `source` | `tutorial/source.sqlite` | `CADEO_TUTORIAL_SOURCE_DATABASE_URL` |
+| Build, check and publish outputs | `destination` | `tutorial/destination.sqlite` | `CADEO_TUTORIAL_DESTINATION_DATABASE_URL` |
+
+Each physical dataset selects `connection: source`. Its table name includes
+the connection ID, for example `source.input_devices`. Publication separately
+selects `delivery.execution.connection: destination`:
+
+```yaml
+sources:
+	connections:
+		source: {url_env: CADEO_TUTORIAL_SOURCE_DATABASE_URL}
+		destination: {url_env: CADEO_TUTORIAL_DESTINATION_DATABASE_URL}
+	datasets:
+		devices:
+			connection: source
+			table: source.input_devices
+			# alias, columns, source record key and contract follow
+delivery:
+	execution: {connection: destination}
+	targets:
+		device: {table: tutorial_device}
+	# dialect, refresh and recovery follow
+```
+
+The build opens the destination and attaches the source database read-only as
+`source`. Generated SQL reads it directly; there is no manual import step.
+Snapshots, staging tables and published views are created only in the destination.
+Published views read destination staging tables, so consumers can query them
+without attaching the source database. This direct cross-database path currently
+supports local SQLite files only, not arbitrary remote database federation.
 
 Run these commands in order to reach the three proof states:
 
@@ -31,6 +71,23 @@ Select **Open starter**. Use **Validate**, **Preview SQL**, then
 **Build & publish** in order. Keep the validation scope set to
 **Current specification**.
 
+In **Connect**, the shared connection registry defines both database URLs.
+Expand **Datasets > devices**: its **Connection** is `source`, not `destination`.
+The **Destination database** selection is `destination`. **Model** shows that
+same destination alongside the selected model's publication table. Changing
+a dataset connection does not change the destination, or vice versa.
+
+Project diagrams include the starter, full product and wrong-mapping exercises
+as separate products with distinct IDs and publication targets. Build each
+exercise individually: the wrong mappings are deliberately designed to fail.
+In the project ERD, `Connection.connection_id` links one-to-one to
+`Device.device_id` in the starter product. In current-product scope, Device is
+shown as external. This conceptual relationship does not add a join or build
+dependency; the full product still reads `input_devices` directly.
+Setup preserves existing contracts. Tutorials created with the earlier single
+`local` connection are not rewritten: initialize a new directory, for example
+`cadeo tutorial init tutorial-separated`, to get the two-database example.
+
 Read results as three distinct proof states:
 
 | State | Proves | Does not prove |
@@ -39,8 +96,9 @@ Read results as three distinct proof states:
 | **SQL compiled** | SQL was generated and checked for the selected dialect. | It ran against data or passed quality checks. |
 | **Data run passed** | The selected data ran through the build and its required checks and publication passed. | Sample data represents production or the product is release-approved. |
 
-The starter build above is the first full run, against the tutorial's local
-SQLite sample data. This fixture is tutorial-specific; CADEO builds are not
+The starter build above is the first full run, reading local SQLite sample
+data from the source database and publishing to the destination database.
+This fixture is tutorial-specific; CADEO builds are not
 SQLite-only. For other products, CLI `cadeo build` and editor **Build & publish**
 use the execution connection selected in `delivery.execution.connection`,
 resolved through `sources.connections.<id>.url_env`.
@@ -119,16 +177,52 @@ The data engineer has explicit dependencies, source snapshots, repeatable SQL,
 quality gates, and run evidence. The owner can trace the output to agreed rules.
 This is a support queue, not a revenue report. It does not prove payment success.
 
+### Unit-test the transformation
+
+The contract's `connection/owner_examples` test is a unit test for the model
+transformation: its inline source rows are passed through the real mapping and
+joins, then compared with all three expected output rows. In particular, D3
+checks that a missing service stays visible with a null service name. This does
+not read the tutorial databases or prove that live data is correct; the build
+checks in steps 1 and 3 cover those separate concerns.
+
+Export and run just the self-contained tests:
+
+```bash
+cadeo compile tutorial/product/product.yaml --out tutorial/unit-tests/correct --dialect sqlite --test-pack sql
+DATABASE_URL=sqlite:// python tutorial/unit-tests/correct/connection_tutorial/tests/connection_tutorial.connection/run.py --kind unit
+```
+
+The runner uses an in-memory SQLite database and inline fixtures, not the
+configured source or destination databases. It needs SQLAlchemy and a driver,
+but does not need CADEO after export. Expect `owner_examples` to pass with zero
+failures.
+
+Now export the intentionally wrong payment-status mapping and run its fixture
+test:
+
+```bash
+cadeo compile tutorial/wrong-status/product.yaml --out tutorial/unit-tests/wrong-status --dialect sqlite --test-pack sql
+DATABASE_URL=sqlite:// python tutorial/unit-tests/wrong-status/payment_status/tests/payment_status.payment/run.py --kind unit
+```
+
+This test is expected to fail with exit code 1: the wrong mapping marks the
+refunded payment as paid, so its output differs from the expected rows. The
+other exported checks are classified as `data` and require live tables; `--kind
+unit` runs only inline-fixture expected-row tests. Unit-test results do not
+replace a build or its acceptance evidence.
+
 ## 5. Try wrong mappings
 
 Build the full product first. Each exercise changes a separate contract, not
-the approved contract. A failed build must leave the published queue unchanged.
+the approved contract, and publishes to its own targets. A failed build must
+leave both the published queue and any existing exercise targets unchanged.
 
-| Exercise | Wrong mapping | Effect | Check that must fail |
+| Exercise | Source and output | Wrong mapping and business effect | Check that must fail |
 | --- | --- | --- | --- |
-| wrong-key | Use merchant ID as connection ID. | D1 and D2 become the same key. Device-level work cannot be assigned correctly. | connection/canonical_key_unique and connection/owner_examples |
-| wrong-status | Treat OFF as active instead of LIVE. | D2 appears active. D3 leaves the support queue. | connection/owner_examples. Accepted-value checks alone cannot detect this error. |
-| inner-join | Use an INNER join for services. | D3 disappears because S9 is absent. Support cannot see the missing record. | connection/reconciliation and connection/owner_examples |
+| wrong-key | `input_shipments` -> `tutorial_shipment` | Using customer ID as shipment ID gives two shipments the same key. | `shipment/canonical_key_unique` |
+| wrong-status | `input_payments` -> `tutorial_payment` | Treating refunded payments as paid reverses the agreed status rule. | `payment/owner_examples` |
+| inner-join | `input_support_agents`, `input_support_tickets` -> `tutorial_support_agent`, `tutorial_support_ticket` | An INNER agent join drops ticket T2 when agent A9 is absent. | `support_ticket/reconciliation` |
 
 CLI: Run `cadeo tutorial exercise wrong-status`. Repeat with `wrong-key` and
 `inner-join`. The command returns success only when the expected failure occurs
@@ -136,6 +230,44 @@ and the published queue remains unchanged. Inspect the printed run manifest.
 UI: Choose an exercise. Select **Run wrong mapping**. Inspect the named failed
 checks and the unchanged support queue. A blocked build is the expected result.
 For the normal build command, a blocked build returns exit code 1.
+
+### Understand the shipment key failure
+
+`canonical_key_unique` is a built-in check generated from the model's
+`unique_key_attributes: [shipment_id]`. Its logic counts groups with duplicate
+shipment IDs; zero duplicate groups is a pass. The reference
+`shipment/canonical_key_unique` under `AC_001` links this check to the acceptance
+criterion. It does not define the check's logic.
+
+Open the shipment exercise. **Map** and **Prove** show **Generated checks** for
+the selected model, including the full check ID and expandable SQL. The SQL is
+generated from the current draft; it is not evidence of a successful run.
+
+**Edit rule settings** opens the model, mapping, or assurance setting that owns
+a generated check. Built-in checks are not arbitrary editable SQL: changing the
+declared key, nullability, joins, or retention policy changes the generated checks.
+
+**Manage custom checks** opens the selected model's check editor in **Prove**.
+Enter a check ID and select **Add custom check**, then choose its type and fill
+in the rule. Accepted values, relationships, expressions, and expected rows use
+the same schema as YAML. Edit the ID to rename a check, or **Remove** it to delete
+it. Renaming updates acceptance links; deletion removes those links after
+confirmation. Save persists these changes to the contract.
+
+Each check offers acceptance-criterion linking and unlinking, as well as
+**Review results** for run evidence. Changing a draft does not execute a check;
+run a build to obtain new evidence.
+
+The source rows are `SH1, C1, North` and `SH2, C1, South`. The intentionally
+wrong mapping `shipment_id: {column: s.customer_id}` produces shipment IDs
+`C1, C1`, so the duplicate-key check fails. The repair is
+`shipment_id: {column: s.shipment_id}`; keep the `customer_id` mapping unchanged.
+Run a build from the editor to verify a repair. **Run wrong mapping** expects a
+failure, so a repaired exercise will no longer meet that button's expected result.
+
+Each exercise is a separate business example, not a one-line variation of the
+device product. A fresh initialization recreates these deliberately wrong
+contracts. Initialization keeps any existing YAML edits; it does not reset them.
 
 To repair a real error, agree the rule with the owner, fix the mapping, rerun
 the checks, and keep the new run evidence. Do not permit row loss by default.
@@ -148,14 +280,17 @@ run `python -m pip install 'cadeo[duckdb]'`. Other extras are listed by `cadeo e
 UI: Open **Workspace**, then **Database driver**. Inspect the driver capability
 before you install it. Driver installation alone does not certify publication.
 
-Create a separate contract and database for migration. Change
-`sources.connections.local.url_env` to your database URL environment variable.
-Set that variable in the shell before you start the CLI or UI. Do not put
-credentials in YAML. Change `delivery.dialect` and load the source tables in
-that database. Run `cadeo engines --url-env YOUR_URL_VARIABLE --connect`, then
-discovery and a test build. Verify publication support for the selected driver.
-This tutorial joins tables in one SQLite database. It does not copy data
-between databases; ingest remote sources into the execution database first.
+Create a separate contract and database for migration. Define named connections
+under `sources.connections` and select each physical dataset's connection and
+the destination execution connection explicitly. Set their URL environment
+variables in the shell before you start the CLI or UI. Do not put credentials in
+YAML. Run `cadeo engines --url-env YOUR_URL_VARIABLE --connect`, then discovery
+and a test build. Verify publication support for the selected driver.
+For separate local SQLite files, qualify each input table with its connection
+ID, as in `source.input_devices`; the executor attaches that file read-only.
+Other backends still require physical inputs on the execution connection:
+ingest remote inputs there first and select that connection for those datasets.
+Driver installation alone does not add cross-database execution support.
 
 ## Stop and clean up
 

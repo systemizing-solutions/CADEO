@@ -1,7 +1,7 @@
 schema:
-  path: product.schema-v0.8.5.json
-  version: "0.8.5"
-spec_version: "0.8.5"
+  path: product.schema-v0.8.7.json
+  version: "0.8.7"
+spec_version: "0.8.7"
 definition:
   name: merchant_operations
   description: One data product publishing linked Merchant and Device canonical tables.

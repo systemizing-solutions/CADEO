@@ -203,6 +203,11 @@ class VisualGraphService:
             start = f'product:{spec.product.name}'
             for index, relation in enumerate(spec.canonical.relationships):
                 matches = by_name.get(relation.entity, [])
+                product_name = spec.product.name.rsplit('.', 1)[0]
+                local_matches = [candidate for candidate in matches
+                                 if candidate.removeprefix('product:').rsplit('.', 1)[0] == product_name]
+                if local_matches:
+                    matches = local_matches
                 if len(matches) == 1:
                     end = matches[0]
                     target = next(entity for entity in entities if entity['id'] == end)

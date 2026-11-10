@@ -61,6 +61,33 @@ class UnifiedExecutionBrokerTests(TestCase):
                     pass
             self.assertFalse(database.exists())
 
+    def test_separate_sqlite_source_is_read_only(self):
+        from sqlalchemy.exc import OperationalError
+        with TemporaryDirectory() as folder:
+            source = Path(folder) / 'source.sqlite'
+            destination = Path(folder) / 'destination.sqlite'
+            with sqlalchemy_connection(source) as connection:
+                connection.exec_driver_sql('CREATE TABLE inputs (id TEXT NOT NULL)')
+                connection.exec_driver_sql("INSERT INTO inputs VALUES ('D1')")
+            destination.touch()
+            with ExecutionBroker().transaction(f'sqlite:///{destination}') as connection:
+                ExecutionBroker.attach_sources(connection, {'source': f'sqlite:///{source}'})
+                self.assertEqual(connection.exec_driver_sql('SELECT id FROM source.inputs').scalar_one(), 'D1')
+                with self.assertRaises(OperationalError):
+                    connection.exec_driver_sql("INSERT INTO source.inputs VALUES ('D2')")
+                connection.exec_driver_sql('CREATE TABLE outputs AS SELECT * FROM source.inputs')
+            with sqlalchemy_connection(destination) as connection:
+                self.assertEqual(connection.exec_driver_sql('SELECT id FROM outputs').scalar_one(), 'D1')
+                self.assertNotIn('inputs', inspect(connection).get_table_names())
+
+    def test_missing_attached_source_is_not_created(self):
+        with TemporaryDirectory() as folder:
+            missing = Path(folder) / 'missing.sqlite'
+            with sqlalchemy_connection(':memory:') as connection:
+                with self.assertRaisesRegex(SpecificationValidationError, 'does not exist'):
+                    ExecutionBroker.attach_sources(connection, {'source': f'sqlite:///{missing}'})
+            self.assertFalse(missing.exists())
+
     def test_rollback_on_error_preserves_prior_view(self):
         with TemporaryDirectory() as folder:
             database = Path(folder) / 'warehouse.sqlite'

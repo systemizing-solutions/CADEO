@@ -130,8 +130,16 @@ checks, publication, and the support queue. The CLI and UI use the same
 contracts and execution services. The [full guide](src/cadeo/templates/tutorial.md)
 includes all commands, wrong-mapping exercises and their business effects,
 owner-review questions, expected results, and instructions for other database
-connections. Use current-file scope. The starter, full product, and wrong
-mappings are separate exercises, not one project to build together.
+connections. Project diagrams show the starter, full product, and wrong-mapping
+exercises as distinct products, including a conceptual Connection-to-Device
+relationship across the full and starter products. Build each exercise separately:
+the wrong mappings are designed to fail their checks.
+
+The tutorial uses two real SQLite databases: `source` reads input tables from
+`source.sqlite` read-only, while `destination` builds and publishes into
+`destination.sqlite`. Each physical dataset selects its source connection;
+`delivery.execution.connection` selects the destination independently.
+Direct reads across connections currently support local SQLite files only.
 
 A local CADEO data run using the connection configured in YAML (e.g. SQLite) is highly
 recommended, not a release requirement. If you skip it,
@@ -146,11 +154,11 @@ for its separate SQLite verification action, not a build-connection override.
 
 ## One product, multiple tables
 
-The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.5.json`](examples/multi_model/product.schema-v0.8.5.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
+The complete runnable example is in [`examples/multi_model/product.yaml`](examples/multi_model/product.yaml), with its pinned local [`product.schema-v0.8.7.json`](examples/multi_model/product.schema-v0.8.7.json). The excerpt below demonstrates the contract (other mandatory fields omitted):
 
 ```yaml
-schema: {path: product.schema-v0.8.5.json, version: "0.8.5"}
-spec_version: "0.8.5"
+schema: {path: product.schema-v0.8.7.json, version: "0.8.7"}
+spec_version: "0.8.7"
 
 definition:
   name: merchant_operations
@@ -261,7 +269,7 @@ All database operations, including SQLite, are executed through SQLAlchemy. The 
 ## Generated deliverables
 
 The output setting is a **root directory**, not a flat collection of files.
-CADEO v0.8.5 creates one folder named after each product's `definition.name`.
+CADEO v0.8.7 creates one folder named after each product's `definition.name`.
 All models belonging to that product stay together, with model-qualified
 filenames such as `merchant_operations.devices.checks.sql`.
 
@@ -302,12 +310,11 @@ combined `acceptance-results.md` in `<project-output-root>/<run-id>/` (by defaul
 report with a relative link to that manifest; `--report` can still select a
 different manifest location.
 
-The built-in YAML/JSON Schema version now matches app v0.8.5; its structure is
-extended only by optional `delivery.artifact_paths`. Compatible specifications
-pinned to the v0.8.4 schema remain valid: validation uses the selected schema's
-`spec_version` constraint, not the app release number. To use new v0.8.5 fields,
-update `spec_version`, `schema.version` and `schema.path` together to the v0.8.5
-schema. Recompile
+The built-in YAML/JSON Schema version matches app v0.8.7. Compatible specifications
+pinned to older schemas remain valid: validation uses the selected schema's
+`spec_version` constraint, not the app release number. To use fields available in
+the current schema, update `spec_version`, `schema.version` and `schema.path`
+together to the v0.8.7 schema. Recompile
 to produce the new layout and update consumers that hard-code flat paths. Use
 the artifact paths returned by compilation or emitted plans where possible.
 Existing flat output files and historical build runs are not moved or deleted.
@@ -378,8 +385,8 @@ the current hard-coded directory tree.
 
 Export is **opt-in** and independent of the output dialect:
 
-In the editor, set **Actions > Compile test-pack export** to **SQL**, then click
-**Compile**. This works for the current saved specification or the entire project.
+In the editor, set **Actions > Export standalone SQL checks** to **SQL test pack**,
+then click **Compile SQL (offline)**. This works for the current saved specification or the entire project.
 The default is **None**. SQL Preview lists exported queries as **standalone test**;
 the completion status shows the pack directories, and **All generated files and
 paths** includes each manifest, runner and README. The selection applies only to
@@ -401,10 +408,12 @@ CADEO, YAML, SQLGlot or SQLFluff. Set `DATABASE_URL` in your environment, then r
 ```bash
 python generated/device_business_tests/tests/device_business_tests.device/run.py
 python generated/device_business_tests/tests/device_business_tests.device/run.py --kind unit
+python generated/device_business_tests/tests/device_business_tests.device/run.py --check CHECK_ID
 ```
 
 `--kind unit` selects self-contained `expected_rows` tests using inline fixtures
 and the real STTM transformation, including unordered duplicate-aware comparison.
+`--check CHECK_ID` selects one exact check ID from that pack's `manifest.json`; repeat the option to select several.
 `--kind data` selects live-data assertions. These use published targets and/or
 current source tables, not compiler staging tables; snapshot checks also need
 the manifest's non-run-specific raw snapshots. All relations must be available
@@ -440,7 +449,7 @@ python -m pytest -q
 node --check src/cadeo/web/editor.js
 ```
 
-The v0.8.5 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
+The v0.8.7 suite covers matching registries, model references, source contracts, mapping completeness, cycle rejection, targeted builds, project references, qualified checks, ERD/lineage and the SQLAlchemy execution broker. SQLGlot, SQLFluff and Flask integration tests run when their dependencies are installed. The included GitHub Actions workflow installs them and runs the real two-table SQLite build and failure-preservation demonstration.
 
 ## Packaging and release
 

@@ -2,6 +2,140 @@
 import pytest
 
 
+def test_editor_saves_and_reopens_incomplete_drafts(tmp_path):
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
+
+    client = create_app(tmp_path).test_client()
+    headers = {'X-Editor-Token': client.get('/api/bootstrap').get_json()['token']}
+    document = {'spec_version': '0.8.7', 'definition': TutorialService().document()['definition']}
+    document['definition']['name'] = 'draft_steps'
+    response = client.put('/api/document', json={'path': 'draft_steps.yaml', 'document': document},
+                          headers=headers)
+    assert response.status_code == 200, response.get_json()
+    saved = response.get_json()
+    reopened = client.get('/api/document?path=draft_steps.yaml').get_json()
+    assert reopened['document'] == saved['document']
+    assert reopened['document']['definition'] == document['definition']
+    assert 'sources' not in reopened['document'] and 'mapping' not in reopened['document']
+    document = reopened['document']
+    document['sources'] = {'connections': {}, 'datasets': {}}
+    response = client.put('/api/document', json={'path': 'draft_steps.yaml', 'document': document,
+                          'etag': saved['etag'], 'schema': reopened['schema']}, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    reopened = client.get('/api/document?path=draft_steps.yaml').get_json()
+    assert reopened['document']['sources'] == {'connections': {}, 'datasets': {}}
+    response = client.post('/api/validate', json={'scope': 'file', 'path': 'draft_steps.yaml',
+                           'document': reopened['document'], 'schema': reopened['schema']}, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()['valid'] is False
+    assert response.get_json()['issues']
+
+
+def test_editor_evidence_fingerprint_preserves_yaml_mapping_order(tmp_path):
+    import json
+    import shutil
+    from pathlib import Path
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.web import create_app
+    from cadeo.services.evidence_service import specification_fingerprint
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
+
+    source = Path(__file__).resolve().parents[1] / 'test/tutorial'
+    workspace = tmp_path / 'tutorial'
+    exercise = workspace / 'inner-join'
+    exercise.mkdir(parents=True)
+    shutil.copyfile(source / 'inner-join/product.yaml', exercise / 'product.yaml')
+    shutil.copyfile(source / 'product.schema.json', workspace / 'product.schema.json')
+
+    files = FileBroker()
+    specs = ProductService(files, SpecificationService(files)).validate(exercise / 'product.yaml').models
+    names = [spec.product.name for spec in specs]
+    manifest = {
+        'format': 'cadeo.run.v1', 'run_id': 'current-run', 'products': names,
+        'specification_hashes': {spec.product.name: specification_fingerprint(spec) for spec in specs},
+        'status': 'failed', 'steps': [], 'tests': [], 'publication': []
+    }
+    manifest_path = exercise / 'build/current-run/run-manifest.json'
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps(manifest))
+
+    client = create_app(tmp_path).test_client()
+    headers = {'X-Editor-Token': client.get('/api/bootstrap').get_json()['token']}
+    editor_document = client.get('/api/document?path=tutorial/inner-join/product.yaml').get_json()['document']
+    assert list(editor_document['sources']['connections']) == ['source', 'destination']
+    assert list(editor_document['model']['entities']['support_ticket']['attributes']) == [
+        'ticket_id', 'agent_id', 'subject', 'agent_name']
+    response = client.post('/api/evidence', json={
+        'document': SpecificationService(files).read_document(exercise / 'product.yaml'),
+        'path': 'tutorial/inner-join/product.yaml',
+        'manifest_path': 'tutorial/inner-join/build/current-run/run-manifest.json',
+        'schema': 'tutorial/product.schema.json'
+    }, headers=headers)
+
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()['current'] is True, response.get_json()
+    assert response.get_json()['stale'] is False, response.get_json()
+
+
+def test_editor_evidence_discovery_ignores_unrelated_workspace_builds(tmp_path):
+    import json
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.exposers.web import create_app
+    from cadeo.services.evidence_service import specification_fingerprint
+    from cadeo.services.product_service import ProductService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.tutorial_service import TutorialService
+    from tests.support import write_document
+
+    product_path = tmp_path / 'tutorial/starter/product.yaml'
+    document = TutorialService().document(starter=True)
+    document['definition']['name'] = 'device_inventory_starter'
+    write_document(product_path, document)
+
+    files = FileBroker()
+    spec, = ProductService(files, SpecificationService(files)).validate(product_path).models
+    manifest = {
+        'format': 'cadeo.run.v1', 'run_id': 'unrelated-workspace-run',
+        'products': [spec.product.name],
+        'specification_hashes': {spec.product.name: specification_fingerprint(spec)},
+        'status': 'passed', 'steps': [], 'tests': [], 'publication': []
+    }
+    workspace_manifest = tmp_path / 'build/unrelated-workspace-run/run-manifest.json'
+    workspace_manifest.parent.mkdir(parents=True)
+    workspace_manifest.write_text(json.dumps(manifest))
+
+    client = create_app(tmp_path).test_client()
+    headers = {'X-Editor-Token': client.get('/api/bootstrap').get_json()['token']}
+    loaded = client.get('/api/document?path=tutorial/starter/product.yaml').get_json()
+    response = client.post('/api/evidence', json={
+        'document': loaded['document'], 'path': 'tutorial/starter/product.yaml',
+        'schema': loaded['schema']
+    }, headers=headers)
+
+    assert response.status_code == 200, response.get_json()
+    evidence = response.get_json()
+    assert evidence['manifest_path'] is None, evidence
+    assert evidence['run_id'] is None, evidence
+    assert evidence['evidence_status'] == 'not_run', evidence
+    assert evidence['summary']['passed'] == 0, evidence
+
+    project_manifest = tmp_path / 'tutorial/build/tutorial-project-run/run-manifest.json'
+    project_manifest.parent.mkdir(parents=True)
+    project_manifest.write_text(json.dumps({**manifest, 'run_id': 'tutorial-project-run'}))
+    response = client.post('/api/evidence', json={
+        'document': loaded['document'], 'path': 'tutorial/starter/product.yaml',
+        'schema': loaded['schema']
+    }, headers=headers)
+
+    assert response.status_code == 200, response.get_json()
+    evidence = response.get_json()
+    assert evidence['run_id'] == 'tutorial-project-run', evidence
+    assert evidence['manifest_path'] == 'tutorial/build/tutorial-project-run/run-manifest.json', evidence
+    assert evidence['current'] is True, evidence
+
+
 def test_pinned_previous_schema_does_not_use_bundled_version(tmp_path):
     import copy
     import json
@@ -33,7 +167,7 @@ def test_pinned_previous_schema_does_not_use_bundled_version(tmp_path):
     assert selected.findings(document) == []
     assert specifications.load(path).definition['spec_version'] == '0.8.4'
     invalid = copy.deepcopy(document)
-    invalid['spec_version'] = '0.8.5'
+    invalid['spec_version'] = '0.8.7'
     with pytest.raises(SpecificationValidationError, match="0.8.4.*expected"):
         selected.parse(invalid)
     invalid = copy.deepcopy(document)
@@ -224,7 +358,7 @@ def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database)
     root = tmp_path / 'tutorial'
     (root / 'starter').mkdir(parents=True)
     if partial_database:
-        with sqlalchemy_connection(root / 'tutorial.sqlite') as connection:
+        with sqlalchemy_connection(root / 'source.sqlite') as connection:
             connection.exec_driver_sql('CREATE TABLE input_devices (device_id TEXT, merchant_id TEXT, service_id TEXT, status TEXT)')
             connection.exec_driver_sql("INSERT INTO input_devices VALUES ('CUSTOM', 'M1', 'S1', 'LIVE')")
     assert not service.ready(root)
@@ -249,11 +383,13 @@ def test_tutorial_create_resumes_without_overwriting(tmp_path, partial_database)
     assert missing.is_file()
     assert service.ready(root)
     assert all(path.read_bytes() == contents for path, contents in original.items())
-    with sqlalchemy_connection(root / 'tutorial.sqlite') as connection:
+    with sqlalchemy_connection(root / 'source.sqlite') as connection:
         rows = connection.exec_driver_sql('SELECT device_id FROM input_devices ORDER BY device_id').fetchall()
         assert [row[0] for row in rows] == (['CUSTOM'] if partial_database else ['D1', 'D2', 'D3'])
         assert connection.exec_driver_sql('SELECT COUNT(*) FROM input_merchants').scalar_one() == 2
         assert connection.exec_driver_sql('SELECT COUNT(*) FROM input_services').scalar_one() == 1
+        for table in ('input_shipments', 'input_payments', 'input_support_agents', 'input_support_tickets'):
+            assert connection.exec_driver_sql(f'SELECT COUNT(*) FROM {table}').scalar_one() > 0
 
 
 def test_tutorial_init_endpoint_recovers_partial_example(tmp_path):
@@ -262,7 +398,7 @@ def test_tutorial_init_endpoint_recovers_partial_example(tmp_path):
 
     root = tmp_path / 'tutorial'
     (root / 'starter').mkdir(parents=True)
-    (root / 'tutorial.sqlite').touch()
+    (root / 'source.sqlite').touch()
     client = create_app(tmp_path).test_client()
     token = client.get('/api/bootstrap').get_json()['token']
     assert client.get('/api/tutorial').get_json()['ready'] is False
@@ -367,6 +503,9 @@ def test_standalone_sql_test_pack_runner(tmp_path, malformed_sql):
     code, report = run('--kind', 'unit')
     assert code == 0 and report['passed']
     assert report['checks'][0]['id'] == 'merchant_mapping_fixture'
+    code, report = run('--check', 'merchant_mapping_fixture')
+    assert code == 0 and report['passed']
+    assert [check['id'] for check in report['checks']] == ['merchant_mapping_fixture']
     code, report = run()
     assert code == 1 and not report['passed']
     assert any('error' in check for check in report['checks'])
@@ -722,6 +861,7 @@ def test_tutorial_erd_shows_declared_connection_relationships(tmp_path):
             for link in graph['relationships']] == [
         ('merchant_id', 'merchant_id', 'many_to_one', 'resolved'),
         ('service_id', 'service_id', 'many_to_one', 'resolved'),
+        ('connection_id', 'device_id', 'one_to_one', 'external'),
     ]
 
 
@@ -802,7 +942,7 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     import yaml
     example=Path(__file__).resolve().parents[1]/'examples/multi_model'
     copy2(example/'product.yaml',tmp_path/'product.yaml')
-    copy2(example/'product.schema-v0.8.5.json',tmp_path/'product.schema-v0.8.5.json')
+    copy2(example/'product.schema-v0.8.7.json',tmp_path/'product.schema-v0.8.7.json')
     app=create_app(tmp_path)
     client=app.test_client()
     doc=yaml.safe_load((tmp_path/'product.yaml').read_text())
@@ -820,6 +960,75 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     expected={mid+'/'+check_id for mid,model in zip(product.model_ids,product.models)
               for check_id,_ in SqlTemplateService().check_statements(model)}
     assert identifiers==expected
+    draft=SpecificationService(FileBroker()).parse(app.json.loads(app.json.dumps(doc)))
+    expected_sql={mid+'/'+check_id: sql for mid,model in zip(draft.model_ids,draft.models)
+                  for check_id,sql in SqlTemplateService().check_statements(model)}
+    assert {item['id']:item['sql'] for item in response.get_json()['checks']}==expected_sql
+
+
+def test_tutorial_project_graph_contains_each_exercise(tmp_path):
+    from cadeo.exposers.web import create_app
+    from cadeo.services.tutorial_service import TutorialService
+
+    TutorialService().create(tmp_path / 'tutorial')
+    client = create_app(tmp_path).test_client()
+    headers = {'X-Editor-Token': client.get('/api/bootstrap').get_json()['token']}
+    response = client.post('/api/graph', headers=headers, json={'mode': 'erd', 'scope': 'project'})
+    assert response.status_code == 200, response.get_json()
+    assert {entity['product'].rsplit('.', 1)[0] for entity in response.get_json()['entities']
+            if entity['product']} == {'connection_tutorial', 'device_inventory_starter',
+                                      'shipment_identity', 'payment_status', 'support_ticket_coverage'}
+    assert {entity['name'] for entity in response.get_json()['entities']} == {
+        'Device', 'Merchant', 'Service', 'Connection', 'Shipment', 'Payment',
+        'SupportAgent', 'SupportTicket'}
+    assert len(response.get_json()['relationships']) == 4
+    assert all(link['status'] == 'resolved' for link in response.get_json()['relationships'])
+    assert all(link['from'].rsplit('.', 1)[0] == link['to'].rsplit('.', 1)[0]
+               for link in response.get_json()['relationships'] if link['related_attribute'] != 'device_id')
+    device_link = next(link for link in response.get_json()['relationships']
+                       if link['related_attribute'] == 'device_id')
+    assert device_link['from'] == 'product:connection_tutorial.connection'
+    assert device_link['to'] == 'product:device_inventory_starter.device'
+    assert device_link['cardinality'] == 'one_to_one'
+
+
+def test_tutorial_separate_connection_preflight_and_discovery(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from cadeo.brokers.database_broker import DatabaseBroker
+    from cadeo.brokers.file_broker import FileBroker
+    from cadeo.models.specification import SpecificationValidationError
+    from cadeo.services.discovery_service import DiscoveryService
+    from cadeo.services.execution_service import ExecutionService
+    from cadeo.services.specification_service import SpecificationService
+    from cadeo.services.tutorial_service import TutorialService
+
+    tutorial = TutorialService()
+    tutorial.create(tmp_path)
+    specification = SpecificationService(FileBroker()).load(tmp_path / 'starter/product.yaml').models[0]
+    selected = {'starter': specification}
+    environment, destination = ExecutionService.connection(selected)
+    assert environment == tutorial.DESTINATION_ENV
+    assert ExecutionService.source_connections(selected, destination) == {
+        'source': f'sqlite:///{tmp_path / "source.sqlite"}'}
+    results = DiscoveryService(DatabaseBroker()).discover(specification, profile=True)
+    assert all(result.passed for result in results)
+    assert results[0].connection == 'source' and results[0].row_count == 3
+    unqualified = replace(specification, sources=tuple(replace(source, table='input_devices')
+                                                     for source in specification.sources))
+    with pytest.raises(SpecificationValidationError, match='qualified as source'):
+        ExecutionService.connection({'starter': unqualified})
+    monkeypatch.setenv(tutorial.SOURCE_ENV, destination)
+    with pytest.raises(SpecificationValidationError, match='destination database file'):
+        ExecutionService.connection(selected)
+    monkeypatch.setenv(tutorial.SOURCE_ENV, 'postgresql://user:secret@example.invalid/database')
+    with pytest.raises(SpecificationValidationError, match='require SQLite') as rejected:
+        ExecutionService.connection(selected)
+    assert 'secret' not in str(rejected.value)
+    monkeypatch.setenv(tutorial.SOURCE_ENV, 'not a database URL')
+    assert not DiscoveryService(DatabaseBroker()).discover(specification)[0].passed
+    monkeypatch.delenv(tutorial.SOURCE_ENV)
+    with pytest.raises(SpecificationValidationError, match=tutorial.SOURCE_ENV):
+        ExecutionService.connection(selected)
 
 
 def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, capsys):
@@ -828,20 +1037,33 @@ def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, cap
     from cadeo.services.specification_service import SpecificationService
     from cadeo.services.sql_service import SqlTemplateService
     from cadeo.brokers.file_broker import FileBroker
+    from cadeo.brokers.execution_broker import ExecutionBroker
     import json
     import yaml
     monkeypatch.setenv(TutorialService.ENV, '')
     root = tmp_path / 'tutorial'
     assert main(['tutorial', 'init', str(root)]) == 0
-    assert 'export CADEO_TUTORIAL_DATABASE_URL=' in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert 'export CADEO_TUTORIAL_SOURCE_DATABASE_URL=' in output
+    assert 'export CADEO_TUTORIAL_DESTINATION_DATABASE_URL=' in output
     original = (root / 'product/product.yaml').read_bytes()
     assert main(['tutorial', 'init', str(root)]) == 0
     assert (root / 'product/product.yaml').read_bytes() == original
+    source_before = (root / 'source.sqlite').read_bytes()
     assert main(['build', str(root / 'starter/product.yaml')]) == 0
     product_reports = list((root / 'starter/generated').glob('*/runs/*/evidence/acceptance-results.md'))
     assert len(product_reports) == 1
     assert 'run-manifest.json' in product_reports[0].read_text()
     assert main(['build', str(root / 'product/product.yaml')]) == 0
+    assert (root / 'source.sqlite').read_bytes() == source_before
+    from sqlalchemy import inspect
+    with ExecutionBroker().transaction(f'sqlite:///{root / "source.sqlite"}') as connection:
+        assert inspect(connection).has_table('input_devices')
+        assert not inspect(connection).has_table('tutorial_connection')
+    with ExecutionBroker().transaction(f'sqlite:///{root / "destination.sqlite"}') as connection:
+        assert not inspect(connection).has_table('input_devices')
+        assert inspect(connection).has_table('tutorial_connection')
+        assert connection.exec_driver_sql('SELECT COUNT(*) FROM tutorial_connection').scalar_one() == 3
     service = TutorialService()
     assert service.report(root)['action_queue'] == [
         {'connection_id': 'D3', 'merchant_name': 'City Pharmacy', 'service_id': 'S9'}]
@@ -854,8 +1076,24 @@ def test_tutorial_cli_setup_build_exercises_and_value(tmp_path, monkeypatch, cap
     generated = {model_id + '/' + check_id for model_id, model in zip(spec.model_ids, spec.models)
                  for check_id, _ in SqlTemplateService().check_statements(model)}
     assert linked == generated
+    publications = {
+        'wrong-key': {'tutorial_shipment': 'SELECT shipment_id, customer_id, destination FROM source.input_shipments'},
+        'wrong-status': {'tutorial_payment': "SELECT payment_id, account_id, 'paid' AS payment_status FROM source.input_payments"},
+        'inner-join': {
+            'tutorial_support_agent': 'SELECT agent_id, agent_name FROM source.input_support_agents',
+            'tutorial_support_ticket': 'SELECT ticket_id, agent_id, subject, NULL AS agent_name FROM source.input_support_tickets'},
+    }
     for case, failed_check in zip(service.CASES, ('canonical_key_unique', 'owner_examples', 'reconciliation')):
+        with ExecutionBroker().transaction(service.activate(root)) as connection:
+            ExecutionBroker.attach_sources(connection, {'source': f'sqlite:///{root / "source.sqlite"}'})
+            for target, query in publications[case].items():
+                connection.exec_driver_sql(f'CREATE TABLE {target}__previous AS {query}')
+                connection.exec_driver_sql(f'CREATE VIEW {target} AS SELECT * FROM {target}__previous')
+        targets = tuple(publications[case])
+        before = service.target_publication(root, targets)
+        assert all(rows is not None for rows in before.values())
         assert main(['tutorial', 'exercise', case, '--path', str(root)]) == 0
+        assert service.target_publication(root, targets) == before
         reports = list((root / case / 'build').glob('*/run-manifest.json'))
         manifest = json.loads(reports[-1].read_text())
         assert manifest['status'] == 'failed'

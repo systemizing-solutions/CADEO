@@ -14,6 +14,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url-env", default="DATABASE_URL")
     parser.add_argument("--kind", choices=("all", "unit", "data"), default="all")
+    parser.add_argument("--check", action="append", dest="check_ids",
+                        help="Run only this exact check ID; may be repeated")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     manifest = json.loads((root / "manifest.json").read_text())
@@ -22,8 +24,13 @@ def main() -> int:
     url = os.environ.get(args.url_env)
     if not url:
         parser.error(f"Set the database URL in {args.url_env}")
+    available_ids = {check["id"] for check in manifest["checks"]}
+    unknown_ids = sorted(set(args.check_ids or ()) - available_ids)
+    if unknown_ids:
+        parser.error("Unknown check ID(s): " + ", ".join(unknown_ids))
     checks = [check for check in manifest["checks"]
-              if args.kind == "all" or check["kind"] == args.kind]
+              if (args.kind == "all" or check["kind"] == args.kind)
+              and (not args.check_ids or check["id"] in args.check_ids)]
     if not checks:
         print(json.dumps({"passed": False, "error": "No checks selected", "checks": []}))
         return 1
