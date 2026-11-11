@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 - Engineering function registry (2026-11-11)
+
+- Add nested `registry: {name, args}` expressions alongside existing database `call` expressions. Validate predefined names, named parameters, structured source references and literal options before SQL generation.
+- Catalogue the toolkit's 104 public functions against revision `45b97aa459f542ca72db9a266f50181ae1f226ac`, with 89 native scalar implementations and explicit existing-stage/exporter-only capability metadata. Keep deduplication, unions, filters and assurance in their current owning stages.
+- Expose the catalogue through `cadeo functions [--json]` and `/api/functions`, with schema-defined scalar choices and readable lineage labels. Exclude literal option dictionaries from source-column lineage.
+- Separate logical function names from exporter mappings, including default `de_toolkit` macro mappings and validated, instance-local overrides for future exporters. No dbt project exporter is introduced.
+- Execute all native scalar names against DuckDB through SQLGlot, test mapping/cleaning/null semantics and invalid options, and validate product compilation through SQLFluff. Database-specific function availability remains a runtime requirement; Unicode normalization and non-scalar macros are not universal native SQL capabilities.
+- Added a Select2-style searchable dropdown with keyboard navigation and preserved driver-selection/install behavior.
+- Align application, bundled schema, initializer, bootstrap, tutorial and editor defaults to 0.9.0 without rewriting historical schema pins.
+
 ## 0.8.8 - Reviewable source bootstrap (2026-11-10)
 
 - Add `cadeo bootstrap` for live SQLAlchemy tables, SQL DDL, CSV headers/sample values, and Parquet schema metadata. Generate source datasets, candidate canonical fields, and provisional mappings without inferring business approval.

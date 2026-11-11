@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml, json, hashlib, shutil
@@ -20,11 +20,11 @@ def serve(route):
         filename=path.removeprefix('/assets/')
         suffix=Path(filename).suffix
         route.fulfill(body=(assets/filename).read_text(),content_type=('text/css' if suffix=='.css' else 'text/javascript'));return
-    if path=='/api/bootstrap': j({'token':'token','workspace':'/workspace','version':'0.8.8'});return
-    if path=='/api/schemas': j({'schemas':['schemas/product-v0.8.8.schema.json']});return
+    if path=='/api/bootstrap': j({'token':'token','workspace':'/workspace','version':'0.9.0'});return
+    if path=='/api/schemas': j({'schemas':['schemas/product-v0.9.0.schema.json']});return
     if path=='/api/schema': j(schema);return
     if path=='/api/files': j({'files':['product.yaml']});return
-    if path=='/api/document': j({'path':'product.yaml','document':document,'yaml':yamltext,'schema':'schemas/product-v0.8.8.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()});return
+    if path=='/api/document': j({'path':'product.yaml','document':document,'yaml':yamltext,'schema':'schemas/product-v0.9.0.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()});return
     if path=='/api/dialects': j({'dialects':['sqlite']});return
     if path=='/api/engines': j({'engines':[]});return
     if path=='/api/engines/installation': j({'job':None,'interpreter':'python','virtual_environment':True});return
@@ -43,16 +43,23 @@ with sync_playwright() as p:
     markup=re.sub(r'<script[^>]*src="[^"]+"[^>]*></script>', '', markup)
     markup=re.sub(r'<link[^>]+href="/assets/[^"]+"[^>]*>', '', markup)
     page.set_content(markup)
+    page.add_style_tag(content=(assets/'tom-select.css').read_text())
     page.add_style_tag(content=(assets/'editor.css').read_text())
     responses={
-      '/api/bootstrap':{'token':'token','workspace':'/workspace','version':'0.8.8'},
-      '/api/schemas':{'schemas':['schemas/product-v0.8.8.schema.json']},
+      '/api/bootstrap':{'token':'token','workspace':'/workspace','version':'0.9.0'},
+      '/api/schemas':{'schemas':['schemas/product-v0.9.0.schema.json']},
       '/api/schema':schema,
       '/api/files':{'files':['product.yaml']},
       '/api/document':{'path':'product.yaml','document':document,'yaml':yamltext,
-        'schema':'schemas/product-v0.8.8.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()},
+        'schema':'schemas/product-v0.9.0.schema.json','etag':hashlib.sha256(yamltext.encode()).hexdigest()},
       '/api/dialects':{'dialects':['sqlite']},
-      '/api/engines':{'engines':[]},
+      '/api/engines':{'engines':[
+        {'id':'sqlite','name':'SQLite','driver_loaded':True,'build_ready':True},
+        {'id':'postgresql','name':'PostgreSQL','driver_loaded':False,'install_extra':'postgresql',
+         'install_command':'pip install cadeo[postgresql]'},
+        {'id':'mariadb','name':'MariaDB','driver_loaded':False,'install_extra':'mariadb'},
+        {'id':'actian','name':'Actian Data Platform / Vector / Actian X / Ingres','driver_loaded':False,
+         'install_extra':'actian'}]},
       '/api/engines/installation':{'job':None,'interpreter':'python','virtual_environment':True},
       '/api/check-registry':{'product':'merchant_operations','checks':[
         {'id':'merchants/canonical_key_unique','type':'generated','model':'merchants',
@@ -89,10 +96,35 @@ with sync_playwright() as p:
       const obj = responses[name] ?? {error:'not implemented: '+name};
       return new Response(JSON.stringify(obj), {status:responses[name]?200:404,headers:{'Content-Type':'application/json'}});
     }; }""",responses)
+    page.add_script_tag(content=(assets/'tom-select.js').read_text())
     page.add_script_tag(content=(assets/'code-preview.js').read_text())
     page.add_script_tag(content=(assets/'lineage-graph.js').read_text())
     page.add_script_tag(content=(assets/'editor.js').read_text())
     page.locator('#documentTitle').filter(has_text='merchant_operations').wait_for(timeout=10000)
+    page.locator('#openWorkspaceTop').click()
+    page.locator('.engine-picker .ts-control').click()
+    driver_search=page.locator('.engine-picker-dropdown .dropdown-input')
+    driver_search.fill('postg')
+    page.locator('.engine-picker-dropdown .option[data-value="postgresql"]').wait_for()
+    expect(page.locator('.engine-picker-dropdown .option[data-selectable]')).to_have_count(1)
+    driver_search.press('Enter')
+    assert page.locator('#engineChoice').input_value()=='postgresql'
+    assert page.locator('#installEngine').is_enabled()
+    assert 'pip install cadeo[postgresql]' in page.locator('#engineInfo').inner_text()
+    page.locator('.engine-picker .ts-control').click()
+    driver_search.fill('no-such-database')
+    page.locator('.engine-picker-dropdown .no-results').wait_for()
+    driver_search.press('Escape')
+    assert page.locator('#engineChoice').input_value()=='postgresql'
+    page.evaluate('refreshEngineCatalog()')
+    assert page.locator('#engineChoice').input_value()=='postgresql'
+    assert page.locator('.engine-picker').count()==1
+    page.locator('.engine-picker .ts-control').click()
+    driver_search.fill('sqlite')
+    page.locator('.engine-picker-dropdown .option[data-value="sqlite"]').click()
+    assert page.locator('#engineChoice').input_value()=='sqlite'
+    assert page.locator('#installEngine').is_disabled()
+    page.locator('#closeWorkspace').click()
     print('title:',page.locator('#documentTitle').text_content())
     print('workflow:',page.locator('#workflow').inner_text()[:150])
     page.evaluate("""async () => {

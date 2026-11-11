@@ -3,7 +3,7 @@
    The server owns YAML parsing, validation, code generation, and database execution. */
 'use strict';
 
-const state = { schema: null, schemaId: 'schemas/product-v0.8.8.schema.json', token: '', document: {}, path: '', etag: null,
+const state = { schema: null, schemaId: 'schemas/product-v0.9.0.schema.json', token: '', document: {}, path: '', etag: null,
                 dirty: false, revision: 0, rawChanged: false, tab: 'form', files: [], yamlDraft: null, yamlBaseline: null, activeStage: 'definition', validation: null, stageScroll: {}, openGroups: {}, graphMode: 'erd', graphScope: 'file', graphField: '', graphBranch: 'all', yamlScroll: 0, sqlArtifacts: [], sqlGenerated: [], sqlContent: {}, sqlStale: false, yamlIssues: [], yamlCursor: 0, evidence: null, evidenceStale: false, checkRegistry: [], checkRegistryStatus: 'unavailable', checkRegistryError: '' };
 const el = id => document.getElementById(id);
 const create = (tag, cls, text) => {
@@ -1039,7 +1039,7 @@ async function refreshSchemas() {
   const choices = (await request('/api/schemas')).schemas;
   const select = el('schemaSelect'); select.replaceChildren();
   for (const choice of choices) {
-    const option = create('option', '', choice === 'schemas/product-v0.8.8.schema.json' ? 'Bundled product schema (v0.8.8)' : choice);
+    const option = create('option', '', choice === 'schemas/product-v0.9.0.schema.json' ? 'Bundled product schema (v0.9.0)' : choice);
     option.value = choice;
     select.append(option);
   }
@@ -1144,7 +1144,7 @@ async function loadFile(path) {
 }
 function blankDocument() {
   return {
-    spec_version: state.schema?.['x-schema-version'] || '0.8.8',
+    spec_version: state.schema?.['x-schema-version'] || '0.9.0',
     definition: {
       name: 'new_product', description: '', owner: { team: '', contact: '' },
       consumers: [], outcome: '', requirements: [], features: [],
@@ -1758,6 +1758,7 @@ async function refreshEngineCatalog() {
   engineEntries = (await request('/api/engines')).engines;
   const picker = el('engineChoice');
   const previous = picker.value;
+  picker.tomselect?.destroy();
   picker.replaceChildren();
   for (const entry of engineEntries) {
     const option = create('option');
@@ -1767,6 +1768,15 @@ async function refreshEngineCatalog() {
     picker.append(option);
   }
   if (engineEntries.some(entry => entry.id === previous)) picker.value = previous;
+  new TomSelect(picker, {
+    plugins: ['dropdown_input'],
+    create: false,
+    maxOptions: null,
+    searchField: ['text'],
+    wrapperClass: 'ts-wrapper engine-picker',
+    dropdownClass: 'ts-dropdown engine-picker-dropdown',
+    placeholder: 'Search database drivers',
+  });
   updateEngineSelection();
 }
 async function pollDriverInstallation() {
@@ -1830,7 +1840,7 @@ async function boot() {
     const init = await request('/api/bootstrap'); state.token = init.token;
     el('workspaceLabel').textContent = init.workspace;
     await refreshSchemas();
-    await activateSchema('schemas/product-v0.8.8.schema.json', false);
+    await activateSchema('schemas/product-v0.9.0.schema.json', false);
     try {
       const dialects = (await request('/api/dialects')).dialects;
       for (const dialect of dialects) { const option = create('option'); option.value = dialect; el('dialectList').append(option); }

@@ -206,9 +206,22 @@ def create_app(workspace: Path, *, overwrite: bool = False):
     def stylesheet():
         return Response(files.read_bundled_text('web/editor.css'), mimetype='text/css')
 
+    @app.get('/assets/tom-select.js')
+    def driver_picker_javascript():
+        return Response(files.read_bundled_text('web/tom-select.js'), mimetype='text/javascript')
+
+    @app.get('/assets/tom-select.css')
+    def driver_picker_stylesheet():
+        return Response(files.read_bundled_text('web/tom-select.css'), mimetype='text/css')
+
     @app.get('/api/bootstrap')
     def bootstrap():
-        return jsonify(token=csrf_token, workspace=str(root), version='0.8.8')
+        return jsonify(token=csrf_token, workspace=str(root), version='0.9.0')
+
+    @app.get('/api/functions')
+    def functions():
+        from cadeo.services.function_registry_service import FunctionRegistryService
+        return jsonify(FunctionRegistryService.catalog())
 
     @app.get('/tutorial')
     def tutorial_page():

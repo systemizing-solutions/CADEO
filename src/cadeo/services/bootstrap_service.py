@@ -152,7 +152,7 @@ class BootstrapService:
 
     @classmethod
     def draft(cls, source: SourceMetadata, product_name: str | None = None,
-              schema_path: str = "product.schema-v0.8.8.json") -> dict[str, Any]:
+              schema_path: str = "product.schema-v0.9.0.json") -> dict[str, Any]:
         fields = source.fields
         if not fields:
             raise SpecificationValidationError("Cannot bootstrap a dataset without columns")
@@ -203,8 +203,8 @@ class BootstrapService:
         mapping = {"source": source_id,
                    "fields": {field.name: {"column": f"{alias}.{field.name}"} for field in fields}}
         document: dict[str, Any] = {
-            "schema": {"path": schema_path, "version": "0.8.8"},
-            "spec_version": "0.8.8",
+            "schema": {"path": schema_path, "version": "0.9.0"},
+            "spec_version": "0.9.0",
             "definition": definition,
             "model": {"entities": {model_id: entity}},
             "sources": {"datasets": {source_id: dataset}},
@@ -234,7 +234,7 @@ class BootstrapService:
         if not isinstance(bootstrap, dict) or not isinstance(bootstrap.get("generated"), dict):
             raise SpecificationValidationError("Refresh requires a CADEO draft with bootstrap.generated metadata")
         fresh = cls.draft(source, current.get("definition", {}).get("name"),
-                          current.get("schema", {}).get("path", "product.schema-v0.8.8.json"))
+                          current.get("schema", {}).get("path", "product.schema-v0.9.0.json"))
         proposal = json.loads(json.dumps(current))
         old_generated = bootstrap["generated"]
         new_generated = fresh["bootstrap"]["generated"]

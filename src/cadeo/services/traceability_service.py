@@ -22,6 +22,14 @@ class TraceabilityService:
         found: set[str] = set()
         def visit(node: Any) -> None:
             if isinstance(node, dict):
+                if "registry" in node:
+                    from cadeo.services.function_registry_service import FunctionRegistryService
+                    call = node["registry"]
+                    definition = FunctionRegistryService.definition(call["name"])
+                    for parameter in definition["expression_parameters"] + definition["expression_lists"]:
+                        if parameter in call["args"]:
+                            visit(call["args"][parameter])
+                    return
                 if "column" in node:
                     found.add(node["column"])
                 for value in node.values():

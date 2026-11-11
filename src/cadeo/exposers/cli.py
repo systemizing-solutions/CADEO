@@ -18,7 +18,7 @@ from cadeo.services.product_service import ProductService
 from cadeo.services.specification_service import SpecificationService
 
 
-VERSION = "0.8.8"
+VERSION = "0.9.0"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     schema.add_argument("--out", type=Path, help="Write the schema to this path (will not overwrite)")
 
     commands.add_parser("dialects", help="List SQL output dialects supported by both SQLGlot and SQLFluff")
+
+    functions = commands.add_parser("functions", help="List predefined engineering functions and exporter mappings")
+    functions.add_argument("--json", action="store_true", help="Print the versioned function catalogue")
 
     engines = commands.add_parser("engines", help="List SQLAlchemy database drivers and their verified capabilities")
     engines.add_argument("--json", action="store_true", help="Machine-readable driver availability and safety status")
@@ -127,6 +130,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="Replace the workspace's bundled schema; leave product YAML and other files untouched")
 
     args = parser.parse_args(argv)
+    if args.command == "functions":
+        from cadeo.services.function_registry_service import FunctionRegistryService
+        catalog = FunctionRegistryService.catalog()
+        if args.json:
+            print(json.dumps(catalog, indent=2))
+        else:
+            for name, function in sorted(catalog["functions"].items()):
+                print(f"{name} ({function['kind']}): " + ", ".join(function["parameters"]))
+        return 0
     if args.command == "engines" and args.connect and not args.url_env:
         parser.error("--connect requires --url-env")
     if args.command == "ui":

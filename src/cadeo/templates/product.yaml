@@ -1,7 +1,7 @@
 schema:
-  path: product.schema-v0.8.8.json
-  version: 0.8.8
-spec_version: 0.8.8
+  path: product.schema-v0.9.0.json
+  version: 0.9.0
+spec_version: 0.9.0
 definition:
   name: device_inventory
   description: Corporate acquiring device inventory

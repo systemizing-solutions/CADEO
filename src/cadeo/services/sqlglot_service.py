@@ -1,5 +1,7 @@
 """The sole SQL output service: SQLGlot renders every artifact for every dialect."""
 
+from functools import lru_cache
+
 from cadeo.models.specification import Specification, SpecificationValidationError
 from cadeo.services.sql_service import SqlTemplateService
 from cadeo.services.sqlfluff_service import SqlFluffService
@@ -14,6 +16,14 @@ class SqlGlotSqlService:
         self.templates = SqlTemplateService(build_id=build_id)
         self.syntax = SqlFluffService()
 
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def _supports_safe_cast(dialect: str) -> bool:
+        from sqlglot import exp, parse_one
+        probe = parse_one("TRY_CAST('invalid' AS INT)", read="spark")
+        rendered = probe.sql(dialect=dialect)
+        return parse_one(rendered, read=dialect).find(exp.TryCast) is not None
+
     def _translate(self, script: str, artifact: str) -> str:
         if not script.strip() or not any(
             line.strip() and not line.lstrip().startswith("--") for line in script.splitlines()
@@ -21,11 +31,19 @@ class SqlGlotSqlService:
             # External-preservation contract is documentation, not executable SQL.
             return script
         try:
-            from sqlglot import ErrorLevel, transpile
+            from sqlglot import ErrorLevel, exp, parse, transpile
             from sqlglot.errors import ParseError, UnsupportedError
         except ImportError as error:
             raise SpecificationValidationError("SQLGlot is required for SQL generation; install package dependencies") from error
         try:
+            safe_casts = any(
+                node.args.get("safe")
+                for statement in parse(script, read="spark") if statement is not None
+                for node in statement.find_all(exp.TryCast)
+            )
+            if safe_casts and not self._supports_safe_cast(self.dialect):
+                raise SpecificationValidationError(
+                    f"Native safe conversion is unavailable for '{self.dialect}'; refusing to replace TRY_CAST with CAST")
             statements = transpile(
                 script,
                 read="spark",

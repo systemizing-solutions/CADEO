@@ -17,6 +17,70 @@ both work with the same specification and services.
 
 ## How it works
 
+### Engineering function registry (0.9.0)
+
+Use a predefined `registry` expression wherever a mapping value is accepted.
+Unlike `call`, which names a database-provided SQL function, a registry name
+identifies an engineering operation independently of its implementation:
+
+```yaml
+mapping:
+  entities:
+    customer:
+      source: crm
+      fields:
+        email:
+          registry:
+            name: clean_email
+            args:
+              expression: {column: crm.email_address}
+```
+
+Arguments use the toolkit's names and defaults. SQL inputs are structured
+expressions, not raw SQL strings; options are ordinary YAML values. Registry
+expressions can nest, for example `fill_missing` around `clean_email`. Predicates
+such as `is_email` return Boolean values and can be compared with `{literal: true}`
+in an existing filter or assertion. Unknown functions, missing/extra parameters,
+undeclared columns, and invalid options are rejected.
+
+`cadeo functions --json` and `GET /api/functions` expose the versioned catalogue,
+required arguments, defaults, expression argument roles, native support, and dbt
+macro mappings. The 104 public names are aligned with the
+[dbt data engineering toolkit](https://github.com/systemizing-solutions/dbt_data_engineering_toolkit/tree/45b97aa459f542ca72db9a266f50181ae1f226ac/dbt/macros).
+The 89 native scalar operations cover cleaning, conversion, mapping, strings,
+formatting, bounds, encoding, statistics, business rules and masking. SQLGlot
+remains the SQL generator, with SQLFluff grammar validation. Warehouse function
+availability still matters: regexes, hashes, arrays, sample statistics and grouped
+number formatting are not supported by every database. Safe conversions reject
+targets where SQLGlot would silently replace `TRY_CAST` with ordinary `CAST`
+(including SQLite and PostgreSQL). `unicode_normalize` fails
+closed for native SQL because normalization is not portable.
+
+Relation, multi-column and assertion macros are catalogued separately, not
+accepted as scalar mapping values. Keep using CADEO's existing `deduplicate`,
+`unions`, `filters` and `assurance` settings; the catalogue points to those stages
+instead of introducing a competing implementation. Other relation/column entries,
+including `date_spine`, `one_hot` and `audit_columns`, are **exporter-only** in this
+release. This is not complete native parity with every toolkit macro.
+
+Exporter names do not affect logical function names. Future exporters can select
+the default `de_toolkit.<name>` macro or supply validated overrides through the
+registry service:
+
+```python
+from cadeo.services.function_registry_service import FunctionRegistryService
+
+registry = FunctionRegistryService(exporters={
+    "dbt": {"clean_email": {"macro": "company_macros.clean_email"}}
+})
+mapping = registry.exporter_mapping("clean_email", "dbt")
+```
+
+Overrides are isolated per service instance and never alter native compilation.
+This release adds the exporter mapping contract, **not a dbt project exporter**.
+Existing `call` expressions remain unchanged. Upgrade a contract's three version
+pins together to use registry expressions; historical pinned schemas remain valid.
+
 ```mermaid
 flowchart TD
   A["Author a product contract<br/>YAML or local editor"] --> B["Validate<br/>Schema and semantic checks"]
@@ -326,11 +390,11 @@ combined `acceptance-results.md` in `<project-output-root>/<run-id>/` (by defaul
 report with a relative link to that manifest; `--report` can still select a
 different manifest location.
 
-The built-in YAML/JSON Schema version matches app v0.8.8. Compatible specifications
+The built-in YAML/JSON Schema version matches app v0.9.0. Compatible specifications
 pinned to older schemas remain valid: validation uses the selected schema's
 `spec_version` constraint, not the app release number. To use fields available in
 the current schema, update `spec_version`, `schema.version` and `schema.path`
-together to the v0.8.8 schema. Recompile
+together to the v0.9.0 schema. Recompile
 to produce the new layout and update consumers that hard-code flat paths. Use
 the artifact paths returned by compilation or emitted plans where possible.
 Existing flat output files and historical build runs are not moved or deleted.

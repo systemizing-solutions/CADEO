@@ -37,4 +37,5 @@ def write_document(path: Path, document: dict) -> None:
     reference.write_text(template.read_text())
     new_document = copy.deepcopy(document)
     new_document['schema'] = {'path': reference.name, 'version': VERSION}
+    new_document['spec_version'] = VERSION
     path.write_text(yaml.safe_dump(new_document, sort_keys=False))

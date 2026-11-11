@@ -48,13 +48,17 @@ def services():
 
 @pytest.fixture
 def doc():
-    return yaml.load(EXAMPLE.read_text(), Loader=UniqueKeysLoader)
+    from cadeo.exposers.cli import VERSION
+    document = yaml.load(EXAMPLE.read_text(), Loader=UniqueKeysLoader)
+    document['spec_version'] = VERSION
+    document['schema']['version'] = VERSION
+    return document
 
 
 def test_public_contract_version():
     schema=json.loads(SCHEMA.read_text())
     from cadeo.exposers.cli import VERSION
-    assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.8.8'
+    assert schema['x-schema-version'] == schema['properties']['spec_version']['const'] == VERSION == '0.9.0'
     assert SchemaCatalogService.DEFAULT == f'schemas/product-v{VERSION}.schema.json'
     assert tuple(schema['properties']) == ('schema','spec_version','definition','model','sources','mapping','assurance','delivery','bootstrap')
     Draft202012Validator.check_schema(schema)
@@ -264,7 +268,7 @@ def test_initializer_creates_versioned_complete_product(services,tmp_path):
     assert yaml_path.exists() and schema_path.exists()
     p=services[0].load(yaml_path)
     assert p.models and p.model_ids
-    assert p.definition['spec_version']=='0.8.8'
+    assert p.definition['spec_version']=='0.9.0'
 
 
 def test_all_examples_share_contract(services):

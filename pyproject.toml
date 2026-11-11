@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cadeo"
-version = "0.8.8"
+version = "0.9.0"
 description = "CADEO (Contract-driven Automation for Data Engineering & Orchestration) is a Contract-driven, schema-validated data product specifications with automated SQL compilation to standardize and simplify data engineering."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ dependencies = [
 license = "MIT"
 
 [project.optional-dependencies]
+test = ["pytest>=8", "duckdb>=1.4,<2"]
 duckdb = ["duckdb-sqlalchemy"]
 postgresql = ["psycopg[binary]"]
 mysql = ["pymysql"]
@@ -78,4 +79,4 @@ cadeo = "cadeo.exposers.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cadeo = ["templates/*.yaml", "templates/*.md", "templates/*.py", "schemas/*.json", "web/*.html", "web/*.js", "web/*.css"]
+cadeo = ["templates/*.yaml", "templates/*.md", "templates/*.py", "schemas/*.json", "web/*.html", "web/*.js", "web/*.css", "web/*.LICENSE.txt"]

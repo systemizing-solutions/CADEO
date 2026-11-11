@@ -19,7 +19,7 @@ from cadeo.models.specification import SpecificationValidationError
 
 
 class SchemaCatalogService:
-    DEFAULT = "schemas/product-v0.8.8.schema.json"
+    DEFAULT = "schemas/product-v0.9.0.schema.json"
     VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
     DRAFT = "https://json-schema.org/draft/2020-12/schema"
 

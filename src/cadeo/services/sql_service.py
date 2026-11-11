@@ -57,6 +57,9 @@ class SqlTemplateService:
             return self.literal(value)
         if op == "call":
             return value["name"] + "(" + ", ".join(self.expression(item) for item in value["args"]) + ")"
+        if op == "registry":
+            from cadeo.services.function_registry_service import FunctionRegistryService
+            return FunctionRegistryService.render(value, self)
         if op == "concat":
             args = [self.expression(item) for item in value]
             return "CONCAT(" + ", ".join(args) + ")"

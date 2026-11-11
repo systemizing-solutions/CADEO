@@ -163,6 +163,15 @@ details.group-card:not([open])>summary{padding-bottom:2px}
 .workspace-section-heading{margin:0 0 10px;color:#42586b;font-size:12px}
 .workspace-sidebar .schema-panel{margin:0 0 20px;padding:0;border:0;background:transparent}
 .workspace-sidebar .schema-panel select,.workspace-sidebar #engineChoice{margin-bottom:8px}
+.workspace-sidebar .engine-picker{width:100%;min-width:0;margin-bottom:8px}
+.engine-picker .ts-control{min-height:38px;padding:9px 30px 9px 10px;border:1px solid #d2d9df;border-radius:6px;background:#fbfcfd;font-size:12px;line-height:1.5}
+.engine-picker .ts-control .item{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.engine-picker.focus .ts-control{border-color:#70a8cf;box-shadow:0 0 0 2px #70a8cf33}
+.engine-picker-dropdown{border:1px solid #cbd9e5;border-radius:6px;background:#fff;color:var(--ink);font-size:12px;box-shadow:0 5px 16px #1b34571a;overflow:hidden}
+.engine-picker-dropdown .dropdown-input{width:100%;min-width:0;padding:10px;border:0;border-bottom:1px solid var(--border);outline-offset:-2px;font:inherit}
+.engine-picker-dropdown .ts-dropdown-content{max-height:min(260px,40vh)}
+.engine-picker-dropdown .option{padding:9px 10px;overflow-wrap:anywhere;white-space:normal}
+.engine-picker-dropdown .active{background:#eaf1f8;color:#18456c}
 .workspace-sidebar .workspace-note{margin:0 0 10px;color:var(--muted);font-size:11px;line-height:1.45}
 .workspace-sidebar .file-list{max-height:34vh;overflow:auto}
 .workspace-sidebar .file-import,.workspace-sidebar #newFile,.workspace-sidebar #downloadYaml,.workspace-sidebar #installEngine{margin:5px 5px 5px 0}

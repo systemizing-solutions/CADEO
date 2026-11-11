@@ -30,6 +30,11 @@ class VisualGraphService:
                 call = value['call']
                 return f"{call['name']}(" + ', '.join(
                     VisualGraphService._expression(arg) for arg in call['args']) + ')'
+            if 'registry' in value:
+                call = value['registry']
+                return f"{call['name']}(" + ', '.join(
+                    f"{name}={VisualGraphService._expression(arg)}"
+                    for name, arg in call['args'].items()) + ')'
             if len(value) == 1:
                 key, operand = next(iter(value.items()))
                 if isinstance(operand, list):

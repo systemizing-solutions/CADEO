@@ -965,7 +965,7 @@ def test_flask_draft_check_registry_matches_compiler(tmp_path):
     expected={mid+'/'+check_id for mid,model in zip(product.model_ids,product.models)
               for check_id,_ in SqlTemplateService().check_statements(model)}
     assert identifiers==expected
-    draft=SpecificationService(FileBroker()).parse(app.json.loads(app.json.dumps(doc)))
+    draft=SpecificationService(FileBroker()).for_file(tmp_path/'product.yaml').parse(app.json.loads(app.json.dumps(doc)))
     expected_sql={mid+'/'+check_id: sql for mid,model in zip(draft.model_ids,draft.models)
                   for check_id,sql in SqlTemplateService().check_statements(model)}
     assert {item['id']:item['sql'] for item in response.get_json()['checks']}==expected_sql

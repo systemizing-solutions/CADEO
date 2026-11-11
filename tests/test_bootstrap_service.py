@@ -71,7 +71,7 @@ def test_live_table_bootstrap_creates_valid_blocked_draft(tmp_path):
         f"sqlite:///{database}", "device", "source", "CADEO_SOURCE_URL")
     draft = BootstrapService.draft(source)
 
-    schema_path = tmp_path / "product.schema-v0.8.8.json"
+    schema_path = tmp_path / "product.schema-v0.9.0.json"
     schema_path.write_text(FileBroker().read_bundled_text("schemas/product.schema.json"), encoding="utf-8")
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(draft)
@@ -99,7 +99,7 @@ def test_cli_bootstrap_and_refresh_write_separate_review_artifacts(tmp_path, mon
         assert main(["bootstrap", "--table", "device", "--url-env", "CADEO_SOURCE_URL",
                      "--out", str(draft_path)]) == 0
     original = draft_path.read_text(encoding="utf-8")
-    assert (tmp_path / "device.schema-v0.8.8.json").is_file()
+    assert (tmp_path / "device.schema-v0.9.0.json").is_file()
 
     csv_path = tmp_path / "device.csv"
     csv_path.write_text("device_id,label\n1,one\n", encoding="utf-8")
